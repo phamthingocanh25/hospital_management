@@ -6,6 +6,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import hashlib
 import getpass
+import bcrypt
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,7 +14,7 @@ load_dotenv()
 # Database Configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'doctor_user'),
+    'user': os.getenv('DB_USER', 'admin_user'),
     'password': os.getenv('DB_PASSWORD', 'doctor_pass'),
     'database': os.getenv('DB_NAME', 'hospitalmanagementsystem'),
     'charset': 'utf8mb4',
@@ -394,33 +395,243 @@ def financial_report_by_month(year=None, current_role=None):
     finally:
         conn.close()
 
+def initialize_admin():
+    """Tạo admin mặc định nếu chưa có trong database"""
+    try:
+        conn = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="MaiAnh<3",
+            database="hospitalmanagementsystem",
+            autocommit=True
+        )
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = 'admin_user';")
+            if cursor.fetchone():
+                print("✅ Admin user đã tồn tại.")
+            else:
+                # Hash mật khẩu mặc định
+                hashed_pw = bcrypt.hashpw("Admin@123".encode('utf-8'), bcrypt.gensalt())
+                cursor.execute(
+                    "INSERT INTO users (username, password, role) VALUES (%s, %s, %s);",
+                    ('admin_user', hashed_pw.decode('utf-8'), 'admin')
+                )
+                print("✅ Admin mặc định đã được tạo (username: admin_user, password: Admin@123)")
+        conn.close()
+    except pymysql.MySQLError as e:
+        print(f"❌ Database error: {e}")
+
+def register_user(username, plain_password, role):
+    hashed_pw = bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt())
+    
+    conn = pymysql.connect(
+        host='localhost',
+        user='root',
+        password='MaiAnh<3',
+        database='hospitalmanagementsystem',
+        autocommit=True
+    )
+    with conn.cursor() as cursor:
+        cursor.execute("INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", 
+                       (username, hashed_pw, role))
+    conn.close()
+    print(f"✅ User {username} registered.")
+
 # Authentication System
 def authenticate_user():
-    """User authentication function with role detection"""
     print("\n--- Hospital Management System Login ---")
     username = input("Username: ")
     password = getpass.getpass("Password: ")
-    
-    # Try to authenticate with each role's credentials
-    roles = ['admin', 'doctor', 'receptionist', 'accountant']
-    
-    for role in roles:
-        config = DB_CONFIG.copy()
-        config.update({
-            'user': os.getenv(f'{role.upper()}_USER', f'{role}_user'),
-            'password': os.getenv(f'{role.upper()}_PASS', f'{role}_pass')
-        })
-        
-        try:
-            connection = pymysql.connect(**config)
+
+    try:
+        connection = pymysql.connect(
+            host="localhost",
+            user="root",
+            password="MaiAnh<3",
+            database="hospitalmanagementsystem",
+            autocommit=True
+        )
+
+        with connection.cursor() as cursor:
+            # Truy vấn thông tin user
+            cursor.execute("SELECT password, role FROM users WHERE username = %s", (username,))
+            result = cursor.fetchone()
+
+            if result:
+                hashed_pw_from_db, role = result
+                # Kiểm tra mật khẩu
+                if bcrypt.checkpw(password.encode('utf-8'), hashed_pw_from_db.encode('utf-8')):
+                    print(f"\n🔑 Login successful! Welcome, {username}.")
+                    print(f"🔐 Role: {role}")
+                    return role, connection
+                else:
+                    print("\n❌ Login failed: Incorrect password.")
+            else:
+                print("\n❌ Login failed: User not found.")
+
             connection.close()
-            print(f"\n🔑 Welcome, {username} ({role})")
-            return role
-        except MySQLError:
-            continue
-    
-    print("❌ Invalid username or password")
-    return None
+            return None, None
+
+    except pymysql.MySQLError as e:
+        print(f"\n❌ Login failed: {e}")
+        return None, None
+
+# Hàm xử lý menu cho từng vai trò
+def handle_role_menu(role, conn):
+    with conn.cursor() as cursor:
+        if role == "doctor":
+            doctor_menu(cursor)
+        elif role == "accountant":
+            accountant_menu(cursor)
+        elif role == "admin":
+            admin_menu(cursor)
+        elif role == "receptionist":
+            receptionist_menu(cursor)
+        else:
+            print("⚠️ Unknown role. No access granted.")
+
+
+# Admin Menu
+def admin_menu(cursor):
+    """Admin menu with full access"""
+    while True:
+        print("\n--- ADMIN MENU ---")
+        print("1. Add Patient")
+        print("2. Add Doctor")
+        print("3. Schedule Appointment")
+        print("4. Create Invoice")
+        print("5. View Appointments (Specific Day)")
+        print("6. View Appointments (All Days)")
+        print("7. Financial Report (By Month)")
+        print("8. Financial Report (By Year)")
+        print("9. Register New User")
+        print("10. Logout")
+
+        choice = input("Choose an option: ")
+
+        if choice == '1':
+            print("Adding patient...")
+        elif choice == '2':
+            print("Adding doctor...")
+        elif choice == '3':
+            print("Scheduling appointment...")
+        elif choice == '4':
+            print("Creating invoice...")
+        elif choice == '5':
+            day = input("Enter specific day (YYYY-MM-DD): ")
+            cursor.execute(f"SELECT * FROM appointments WHERE appointment_date = '{day}';")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '6':
+            cursor.execute("SELECT * FROM appointments;")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '7':
+            month = input("Enter month (YYYY-MM): ")
+            cursor.execute(f"SELECT * FROM invoices WHERE invoice_date LIKE '{month}-%';")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '8':
+            year = input("Enter year (YYYY): ")
+            cursor.execute(f"SELECT * FROM invoices WHERE invoice_date LIKE '{year}-%';")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '9':
+            username = input("Enter new username: ")
+            password = getpass.getpass("Enter new password: ")
+            role = input("Enter role (admin/doctor/receptionist/accountant): ")
+            hashed_pw = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+            cursor.execute("INSERT INTO users (username, password, role) VALUES (%s, %s, %s)", 
+                           (username, hashed_pw.decode('utf-8'), role))
+            print(f"User {username} registered successfully.")
+        elif choice == '10':
+            print("Logging out...")
+            break
+        else:
+            print("Invalid option. Try again.")
+
+# Doctor Menu
+def doctor_menu(cursor):
+    """Doctor menu with limited access"""
+    while True:
+        print("\n--- DOCTOR MENU ---")
+        print("1. View My Patients")
+        print("2. View My Appointments")
+        print("3. Logout")
+        
+        choice = input("Choose an option: ")
+
+        if choice == '1':
+            cursor.execute("SELECT * FROM patients WHERE doctor_assigned = 'doctor_user';")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '2':
+            cursor.execute("SELECT * FROM appointments WHERE doctor_name = 'doctor_user';")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '3':
+            print("Logging out...")
+            break
+        else:
+            print("Invalid option. Try again.")
+
+# Receptionist Menu
+def receptionist_menu(cursor):
+    """Receptionist menu with limited access"""
+    while True:
+        print("\n--- RECEPTIONIST MENU ---")
+        print("1. View Patients")
+        print("2. View Appointments")
+        print("3. Logout")
+        
+        choice = input("Choose an option: ")
+
+        if choice == '1':
+            cursor.execute("SELECT * FROM patients;")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '2':
+            cursor.execute("SELECT * FROM appointments;")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '3':
+            print("Logging out...")
+            break
+        else:
+            print("Invalid option. Try again.")
+
+# Accountant Menu
+def accountant_menu(cursor):
+    """Accountant menu with limited access"""
+    while True:
+        print("\n--- ACCOUNTANT MENU ---")
+        print("1. View Patients")
+        print("2. View Invoices")
+        print("3. Logout")
+        
+        choice = input("Choose an option: ")
+
+        if choice == '1':
+            cursor.execute("SELECT * FROM patients;")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '2':
+            cursor.execute("SELECT * FROM invoices;")
+            for row in cursor.fetchall():
+                print(row)
+        elif choice == '3':
+            print("Logging out...")
+            break
+        else:
+            print("Invalid option. Try again.")
+
+# Main execution
+role, conn = authenticate_user()
+
+if conn:
+    handle_role_menu(role, conn)
+else:
+    print("🚫 Cannot proceed without login.")
 
 # Menu Systems for Each Role
 def admin_menu():
@@ -435,7 +646,8 @@ def admin_menu():
         print("6. View Appointments (All Days)")
         print("7. Financial Report (By Month)")
         print("8. Financial Report (By Year)")
-        print("9. Logout")
+        print("9. Register New User")
+        print("10. Logout")
         
         choice = input("Choose an option (1-9): ")
         
@@ -486,9 +698,15 @@ def admin_menu():
             financial_report_by_month(current_role='admin')
             
         elif choice == "9":
+            register_username = input("Enter new username: ")
+            register_password = getpass.getpass("Enter new password: ")
+            register_role = input("Enter role (admin/doctor/receptionist/accountant): ")
+            register_user(register_username, register_password, register_role)
+            break
+        
+        elif choice == "10":
             print("Logging out...")
             break
-            
         else:
             print("❌ Invalid choice. Please try again.")
 
@@ -666,4 +884,5 @@ def main():
         accountant_menu()
 
 if __name__ == "__main__":
+    initialize_admin()
     main()
