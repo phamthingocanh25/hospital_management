@@ -73,18 +73,18 @@ DELIMITER ;
 -- Database Security and Administration
 -- Configure user roles, permissions, and security settings.
 CREATE USER 'admin_user'@'localhost' IDENTIFIED BY 'admin_pass';
-GRANT ALL PRIVILEGES ON hospital_db.* TO 'admin_user'@'localhost';
+GRANT ALL PRIVILEGES ON hospitalmanagementsystem.* TO 'admin_user'@'localhost';
 
 CREATE USER 'doctor_user'@'localhost' IDENTIFIED BY 'doctor_pass';
 GRANT SELECT ON hospital_db.Patients TO 'doctor_user'@'localhost';
-GRANT SELECT, UPDATE ON hospital_db.Appointments TO 'doctor_user'@'localhost';
+GRANT SELECT, UPDATE ON hospitalmanagementsystem.Appointments TO 'doctor_user'@'localhost';
 
 CREATE USER 'receptionist_user'@'localhost' IDENTIFIED BY 'recept_pass';
-GRANT SELECT, INSERT, UPDATE ON hospital_db.Patients TO 'receptionist_user'@'localhost';
-GRANT SELECT, INSERT, UPDATE ON hospital_db.Appointments TO 'receptionist_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Patients TO 'receptionist_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Appointments TO 'receptionist_user'@'localhost';
 
 CREATE USER 'accountant_user'@'localhost' IDENTIFIED BY 'acct_pass';
-GRANT SELECT, INSERT, UPDATE ON hospital_db.Invoices TO 'accountant_user'@'localhost';
-GRANT SELECT (PatientID, PatientName) ON hospital_db.Patients TO 'accountant_user'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Invoices TO 'accountant_user'@'localhost';
+GRANT SELECT (PatientID, PatientName) ON hospitalmanagementsystem.Patients TO 'accountant_user'@'localhost';
 
 FLUSH PRIVILEGES;
