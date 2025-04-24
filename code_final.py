@@ -17,7 +17,7 @@ load_dotenv()
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'anh@2502'),
+    'password': os.getenv('DB_PASSWORD', 'MaiAnh<3'),
     'database': os.getenv('DB_NAME', 'hospitalmanagementsystem'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
@@ -575,7 +575,7 @@ def admin_menu(conn, username):
             change_password(conn, username)
         elif choice == '12':
             print("Logging out...")
-            break
+            return
         else:
             print("❌ Invalid option")
 
@@ -618,7 +618,7 @@ def doctor_menu(conn, doctor_id, username):
             change_password(conn, username)
         elif choice == '4':
             print("Logging out...")
-            break
+            return
         else:
             print("❌ Invalid option")
 
@@ -647,7 +647,7 @@ def receptionist_menu(conn, username):
             change_password(conn, username)
         elif choice == '6':
             print("Logging out...")
-            break
+            return
         else:
             print("❌ Invalid option")
 
@@ -673,7 +673,7 @@ def accountant_menu(conn, username):
             change_password(conn, username)
         elif choice == '5':
             print("Logging out...")
-            break
+            return
         else:
             print("❌ Invalid option")
 
@@ -685,23 +685,27 @@ def main():
     # Initialize admin account if not exists
     initialize_admin()
     
-    # Authenticate user
-    username, role, conn, role_id = authenticate_user()
-    if not role or not conn:
-        return
-    
-    try:
-        # Launch appropriate menu based on role
-        if role == 'admin':
-            admin_menu(conn, username)
-        elif role == 'doctor':
-            doctor_menu(conn, role_id, username)
-        elif role == 'receptionist':
-            receptionist_menu(conn, username)
-        elif role == 'accountant':
-            accountant_menu(conn, username)
-    finally:
-        conn.close()
+    while True:
+        # Authenticate user
+        username, role, conn, role_id = authenticate_user()
+        if not role or not conn:
+            print("❌ Authentication failed. Exiting...")
+            break
+        print(f"\n🔑 Logged in as {username} with role {role}.")
+        
+        try:
+            # Launch appropriate menu based on role
+            if role == 'admin':
+                admin_menu(conn, username)
+            elif role == 'doctor':
+                doctor_menu(conn, role_id, username)
+            elif role == 'receptionist':
+                receptionist_menu(conn, username)
+            elif role == 'accountant':
+                accountant_menu(conn, username)
+        finally:
+            conn.close()
+            print("🔒 Session ended. Returning to login...\n")
 
 if __name__ == "__main__":
     main()
