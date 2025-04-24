@@ -215,6 +215,27 @@ def change_password(conn, username):
         conn.rollback()
         return False
 
+def delete_user(conn):
+    """Delete a user from the system"""
+    print("\n--- Delete User ---")
+    username = input("Username: ")
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
+            if not cursor.fetchone():
+                print("❌ User not found")
+                return False
+
+            cursor.execute("DELETE FROM users WHERE username = %s", (username,))
+            conn.commit()
+            print("✅ User deleted successfully.")
+            return True
+    except MySQLError as e:
+        print(f"❌ Failed to delete user: {e}")
+        conn.rollback()
+        return False
+    
 # Doctor Management
 def add_doctor(conn):
     """Add new doctor with automatic account creation"""
@@ -260,6 +281,29 @@ def add_doctor(conn):
             return True
     except MySQLError as e:
         print(f"❌ Failed to add doctor: {e}")
+        conn.rollback()
+        return False
+
+def delete_doctor(conn):
+    """Delete a doctor from the system"""
+    print("\n--- Delete Doctor ---")
+    doctor_id = input("Doctor ID: ")
+
+    try:
+        with conn.cursor() as cursor:
+            # Check if doctor exists
+            cursor.execute("SELECT DoctorID FROM Doctors WHERE DoctorID = %s", (doctor_id,))
+            if not cursor.fetchone():
+                print("❌ Doctor not found")
+                return False
+
+            # Delete from Doctors table
+            cursor.execute("DELETE FROM Doctors WHERE DoctorID = %s", (doctor_id,))
+            conn.commit()
+            print("✅ Doctor deleted successfully.")
+            return True
+    except MySQLError as e:
+        print(f"❌ Failed to delete doctor: {e}")
         conn.rollback()
         return False
 
@@ -313,6 +357,29 @@ def view_patients(conn):
             return True
     except MySQLError as e:
         print(f"❌ Failed to retrieve patients: {e}")
+        return False
+
+def delete_patient(conn):
+    """Delete a patient from the system"""
+    print("\n--- Delete Patient ---")
+    patient_id = input("Patient ID: ")
+
+    try:
+        with conn.cursor() as cursor:
+            # Check if patient exists
+            cursor.execute("SELECT PatientID FROM Patients WHERE PatientID = %s", (patient_id,))
+            if not cursor.fetchone():
+                print("❌ Patient not found")
+                return False
+
+            # Delete from Patients table
+            cursor.execute("DELETE FROM Patients WHERE PatientID = %s", (patient_id,))
+            conn.commit()
+            print("✅ Patient deleted successfully.")
+            return True
+    except MySQLError as e:
+        print(f"❌ Failed to delete patient: {e}")
+        conn.rollback()
         return False
 
 # Appointment Management
@@ -455,6 +522,38 @@ def create_invoice(conn):
         print(f"❌ Unexpected error: {e}")
         return False
 
+def view_invoices(conn):
+    """View invoices by Patient ID"""
+    patient_id = input("Enter Patient ID to view invoices: ").strip()
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT i.InvoiceID, p.PatientName, i.InvoiceDate, i.TotalAmount
+                FROM Invoices i
+                JOIN Patients p ON i.PatientID = p.PatientID
+                WHERE i.PatientID = %s
+                ORDER BY i.InvoiceDate DESC
+            """, (patient_id,))
+            
+            invoices = cursor.fetchall()
+            
+            if not invoices:
+                print("❌ No invoices found for this patient.")
+                return False
+
+            print(f"\n--- INVOICES FOR PATIENT ID {patient_id} ---")
+            for invoice in invoices:
+                print(f"\nID: {invoice['InvoiceID']}")
+                print(f"Patient: {invoice['PatientName']}")
+                print(f"Date: {invoice['InvoiceDate']}")
+                print(f"Total Amount: {invoice['TotalAmount']:,.2f} VND")
+            print("\nTotal invoices found:", len(invoices))
+            return True
+    except MySQLError as e:
+        print(f"❌ Failed to retrieve invoices: {e}")
+        return False
+    
 # Department Management
 def view_departments(conn):
     """View all departments in the system"""
@@ -537,43 +636,52 @@ def admin_menu(conn, username):
     while True:
         print("\n--- ADMIN MENU ---")
         print("1. Register New User")
-        print("2. Add Doctor")
-        print("3. Add Patient")
-        print("4. View Patients")
-        print("5. Schedule Appointment")
-        print("6. View Appointments")
-        print("7. Create Invoice")
-        print("8. View Invoices")
-        print("9. View Departments")
-        print("10. Financial Reports")
-        print("11. Change Password")
-        print("12. Logout")
+        print("2. Delete User")
+        print("3. Add Doctor")
+        print("4. Delete Doctor")
+        print("5. Add Patient")
+        print("6. Delete Patient")
+        print("7. View Patients")
+        print("8. Schedule Appointment")
+        print("9. View Appointments")
+        print("10. Create Invoice")
+        print("11. View Invoices")
+        print("12. View Departments")
+        print("13. Financial Reports")
+        print("14. Change Password")
+        print("15. Logout")
 
         choice = input("Choose an option: ")
 
         if choice == '1':
             register_user(conn)
         elif choice == '2':
-            add_doctor(conn)
+            delete_user(conn)
         elif choice == '3':
-            add_patient(conn)
+            add_doctor(conn)
         elif choice == '4':
-            view_patients(conn)
+            delete_doctor(conn)
         elif choice == '5':
-            schedule_appointment(conn)
+            add_patient(conn)
         elif choice == '6':
-            view_appointments(conn)
+            delete_patient(conn)
         elif choice == '7':
-            create_invoice(conn)
+            view_patients(conn)
         elif choice == '8':
-            view_invoices(conn)
+            schedule_appointment(conn)
         elif choice == '9':
-            view_departments(conn)
+            view_appointments(conn)
         elif choice == '10':
-            generate_financial_report(conn)
+            create_invoice(conn)
         elif choice == '11':
-            change_password(conn, username)
+            view_invoices(conn)
         elif choice == '12':
+            view_departments(conn)
+        elif choice == '13':
+            generate_financial_report(conn)
+        elif choice == '14':
+            change_password(conn, username)
+        elif choice == '15':
             print("Logging out...")
             return
         else:
@@ -627,25 +735,28 @@ def receptionist_menu(conn, username):
     while True:
         print("\n--- RECEPTIONIST MENU ---")
         print("1. Add Patient")
-        print("2. View Patients")
-        print("3. Schedule Appointment")
-        print("4. View Appointments")
-        print("5. Change Password")
-        print("6. Logout")
+        print("2. Delete Patient")
+        print("3. View Patients")
+        print("4. Schedule Appointment")
+        print("5. View Appointments")
+        print("6. Change Password")
+        print("7. Logout")
 
         choice = input("Choose an option: ")
 
         if choice == '1':
             add_patient(conn)
         elif choice == '2':
-            view_patients(conn)
+            delete_patient(conn)
         elif choice == '3':
-            schedule_appointment(conn)
+            view_patients(conn)
         elif choice == '4':
-            view_appointments(conn)
+            schedule_appointment(conn)
         elif choice == '5':
-            change_password(conn, username)
+            view_appointments(conn)
         elif choice == '6':
+            change_password(conn, username)
+        elif choice == '7':
             print("Logging out...")
             return
         else:
@@ -690,7 +801,7 @@ def main():
         username, role, conn, role_id = authenticate_user()
         if not role or not conn:
             print("❌ Authentication failed. Exiting...")
-            break
+            continue
         print(f"\n🔑 Logged in as {username} with role {role}.")
         
         try:
