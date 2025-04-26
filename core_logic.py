@@ -64,6 +64,30 @@ def get_db_connection():
         return None
 
 # Authentication System
+def is_valid_username(username):
+    if len(username) < 3 or len(username) > 15:
+        return False, "❌ Username must be between 3 and 15 characters long."
+    if not re.match(r"^[a-zA-Z0-9_]+$", username):
+        return False, "❌ Username can only contain letters, numbers, and underscores."
+    return True, None
+
+def is_strong_password(password):
+        """Check if password is strong"""
+        if len(password) < 8:
+            return False, "❌ Password must be at least 8 characters long."
+        if not re.search(r"[A-Z]", password):
+            return False, "❌ Password must contain at least one uppercase letter."
+        if not re.search(r"[a-z]", password):
+            return False, "❌ Password must contain at least one lowercase letter."
+        if not re.search(r"[0-9]", password):
+            return False, "❌ Password must contain at least one digit."
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+            return False, "❌ Password must contain at least one special character."
+        return True, None
+
+import bcrypt
+from mysql.connector import MySQLConnection, Error
+
 def authenticate_user(username, password):
     """Authenticate user and return role and role-specific ID"""
     try:
@@ -71,20 +95,20 @@ def authenticate_user(username, password):
         if not conn:
             return None, None, None, None, "Database connection failed"
 
-        with conn.cursor() as cursor:
+        with conn.cursor() as cursor:  # Ensure that the result is in dictionary format
             cursor.execute("""
                 SELECT u.username, u.password, u.role,
                        CASE WHEN u.role = 'doctor' THEN d.DoctorID ELSE NULL END as role_id
                 FROM users u
                 LEFT JOIN Doctors d ON u.username = d.DoctorUser
-                WHERE u.username = %s
+                WHERE BINARY u.username = %s
             """, (username,))
-            
+
             user = cursor.fetchone()
-            
+
             if user:
                 db_password = user['password']
-                # Check if password matches the bcrypt hash stored in db
+                # Kiểm tra mật khẩu (bcrypt sẽ tự động so sánh với mật khẩu đã được mã hóa)
                 if bcrypt.checkpw(password.encode('utf-8'), db_password.encode('utf-8')):
                     return user['username'], user['role'], conn, user['role_id'], None
                 else:
@@ -122,8 +146,14 @@ def initialize_admin():
 # User Management
 def register_user(conn, username, password, confirm_password, role):
     """Register user from GUI input"""
+    if not is_valid_username(username)[0]:
+        return False, is_valid_username(username)[1]
+    
     if password != confirm_password:
         return False, "❌ Passwords do not match"
+    
+    if not is_strong_password(password)[0]:
+        return False, "❌ Password must be at least 8 characters long and contain a mix of uppercase, lowercase, numbers, and special characters."
 
     valid_roles = ['admin', 'accountant', 'receptionist']
     if role.lower() not in valid_roles:
@@ -162,7 +192,8 @@ def change_password(conn, username, old_password, new_password):
                         return False, "❌ New password cannot be the same as the old password."
                     else:
                         # Mật khẩu mới không trùng mật khẩu cũ, tiến hành cập nhật
-
+                        if not is_strong_password(new_password)[0]:
+                            return False, "❌ Password must be at least 8 characters long and contain a mix of uppercase, lowercase, numbers, and special characters."
                         hashed_new_password = hash_password(new_password)
                         cursor.execute("UPDATE Users SET Password = %s WHERE Username = %s", (hashed_new_password, username))
                         conn.commit()
