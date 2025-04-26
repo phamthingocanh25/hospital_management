@@ -1,4 +1,4 @@
-from core_logic import *
+from 7.core_logic import *
 import tkinter as tk
 from tkinter import messagebox
 
