@@ -85,9 +85,6 @@ def is_strong_password(password):
             return False, "❌ Password must contain at least one special character."
         return True, None
 
-import bcrypt
-from mysql.connector import MySQLConnection, Error
-
 def authenticate_user(username, password):
     """Authenticate user and return role and role-specific ID"""
     try:
@@ -255,9 +252,7 @@ def add_doctor(conn, name, dept_id, specialization, username):
             """, (username, hashed_pw))
 
             conn.commit()
-            print("✅ Doctor added successfully.")
-            print(f"⚠️ Temporary password: {temp_password} - Please change immediately!")
-            return True, "✅ Doctor added successfully."
+            return True, f"✅ Doctor added successfully. Temporary password: {temp_password} - Please change immediately!"
     except MySQLError as e:
         print(f"❌ Failed to add doctor: {e}")
         conn.rollback()
