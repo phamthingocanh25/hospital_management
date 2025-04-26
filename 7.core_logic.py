@@ -85,6 +85,9 @@ def is_strong_password(password):
             return False, "❌ Password must contain at least one special character."
         return True, None
 
+import bcrypt
+from mysql.connector import MySQLConnection, Error
+
 def authenticate_user(username, password):
     """Authenticate user and return role and role-specific ID"""
     try:
@@ -306,7 +309,9 @@ def search_patient(conn, patient_id=None, name=None):
     """Search for a patient by ID or name"""
     try:
         with conn.cursor() as cursor:
-            if patient_id:
+            if patient_id and name:
+                cursor.execute("SELECT * FROM Patients WHERE PatientID = %s AND PatientName LIKE %s", (patient_id, '%' + name + '%'))
+            elif patient_id:
                 cursor.execute("SELECT * FROM Patients WHERE PatientID = %s", (patient_id,))
             elif name:
                 cursor.execute("SELECT * FROM Patients WHERE PatientName LIKE %s", ('%' + name + '%',))
@@ -385,7 +390,7 @@ def view_appointments(conn, role, username=None, year=None, month=None, day=None
         with conn.cursor() as cursor:
             query = """
                 SELECT AppointmentID, DoctorID, PatientID, AppointmentDate, AppointmentTime
-                FROM Appointments
+                FROM Appointments ORDER BY AppointmentDate DESC, AppointmentTime DESC
             """
             params = []
             conditions = []
@@ -479,7 +484,7 @@ def view_departments(conn):
     """View all departments"""
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT DepartmentID, DepartmentName FROM Departments")
+            cursor.execute("SELECT d1.DepartmentID, d1.DepartmentName, COUNT(d2.DoctorID) AS DoctorCount FROM departments d1 JOIN doctors d2 ON d1.DepartmentID=d2.DepartmentID GROUP BY DepartmentID")
             departments = cursor.fetchall()
             if departments:
                 return True, departments
