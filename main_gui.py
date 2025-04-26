@@ -2,7 +2,8 @@ from core_logic import *
 import tkinter as tk
 from tkinter import messagebox
 
-def open_login_window():
+def open_login_window(root):
+    root.destroy()
     def authenticate_user_action():
         """Handles authentication for the login window"""
         username = username_entry.get()  # Assuming username_entry is a Tkinter entry widget
@@ -14,6 +15,8 @@ def open_login_window():
             messagebox.showerror("Login Failed", error)
             return
         
+        login_window.destroy()
+
         # Proceed based on the role
         if role == "admin":
             messagebox.showinfo("Login Successful", "Welcome Admin!")
@@ -29,6 +32,7 @@ def open_login_window():
             open_accountant_menu(conn, username)
         else:
             messagebox.showerror("Login Failed", "Unknown role")
+            return
 
 
     login_window = tk.Tk()
@@ -48,7 +52,7 @@ def open_login_window():
     login_window.mainloop()
 
 def open_admin_menu(conn, username):
-    admin_window = tk.Toplevel()
+    admin_window = tk.Tk()
     admin_window.title("Admin Menu")
 
     # Create buttons for each action
@@ -67,12 +71,12 @@ def open_admin_menu(conn, username):
     tk.Button(admin_window, text="View Departments", command=view_departments_action).pack(pady=10)
     tk.Button(admin_window, text="Financial Report", command=generate_financial_report_action).pack(pady=10)
     tk.Button(admin_window, text="Change Password", command=lambda: change_password_action(conn, username)).pack(pady=10)
-    tk.Button(admin_window, text="Logout", command=admin_window.destroy).pack(pady=10)
+    tk.Button(admin_window, text="Logout", command= lambda: logout_action(admin_window)).pack(pady=10)
 
     admin_window.mainloop()
 
 def open_doctor_menu(conn, role_id, username):
-    doctor_window = tk.Toplevel()
+    doctor_window = tk.Tk()
     doctor_window.title("Doctor Menu")
 
     # Create buttons for each action
@@ -85,7 +89,7 @@ def open_doctor_menu(conn, role_id, username):
     doctor_window.mainloop()
 
 def open_receptionist_menu(conn, username):
-    receptionist_window = tk.Toplevel()
+    receptionist_window = tk.Tk()
     receptionist_window.title("Receptionist Menu")
 
     # Create buttons for each action
@@ -99,19 +103,19 @@ def open_receptionist_menu(conn, username):
     tk.Button(receptionist_window, text="View Invoices", command=view_invoices_action).pack(pady=10)
     tk.Button(receptionist_window, text="View Departments", command=view_departments_action).pack(pady=10)
     tk.Button(receptionist_window, text="Change Password", command=lambda: change_password_action(conn, username)).pack(pady=10)
-    tk.Button(receptionist_window, text="Logout", command=receptionist_window.destroy).pack(pady=10)
+    tk.Button(receptionist_window, text="Logout", command= lambda: logout_action(receptionist_window)).pack(pady=10)
 
     receptionist_window.mainloop()
 
 def open_accountant_menu(conn, username):
-    accountant_window = tk.Toplevel()
+    accountant_window = tk.Tk()
     accountant_window.title("Accountant Menu")
 
     # Create buttons for each action
     tk.Button(accountant_window, text="View Invoices", command=view_invoices_action).pack(pady=10)
     tk.Button(accountant_window, text="Financial Report", command=generate_financial_report_action).pack(pady=10)
     tk.Button(accountant_window, text="Change Password", command=lambda: change_password_action(conn, username)).pack(pady=10)
-    tk.Button(accountant_window, text="Logout", command=accountant_window.destroy).pack(pady=10)
+    tk.Button(accountant_window, text="Logout", command=lambda: logout_action(accountant_window)).pack(pady=10)
 
     accountant_window.mainloop()
 
@@ -712,13 +716,19 @@ def change_password_action(conn, username):
     # Nút để xác nhận thay đổi mật khẩu
     tk.Button(change_password_window, text="Change Password", command=submit_change_password).pack(pady=10)
 
+def logout_action(current_window):
+    current_window.destroy()
+    messagebox.showinfo("Logout", "You have been logged out.")
+    main()
+
 def main():
+    global root
     root = tk.Tk()
     root.title("Hospital Management System")
-    root.geometry("300x200")
+    root.geometry("400x300")
 
     tk.Label(root, text="Welcome to the Hospital Management System").pack(pady=20)
-    tk.Button(root, text="Login", command=open_login_window).pack(pady=20)
+    tk.Button(root, text="Login", command=lambda: open_login_window(root)).pack(pady=20)
 
     root.mainloop()
 
