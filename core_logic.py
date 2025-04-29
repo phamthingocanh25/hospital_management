@@ -388,18 +388,16 @@ def view_appointments(conn, role, username=None, year=None, month=None, day=None
     """
     try:
         with conn.cursor() as cursor:
-            query = """
+            base_query = """
                 SELECT AppointmentID, DoctorID, PatientID, AppointmentDate, AppointmentTime
-                FROM Appointments ORDER BY AppointmentDate DESC, AppointmentTime DESC
+                FROM Appointments
             """
             params = []
             conditions = []
 
             if role.lower() == 'doctor':
-                query += " WHERE DoctorID = (SELECT DoctorID FROM Doctors WHERE Username = %s)"
+                conditions.append("DoctorID = (SELECT DoctorID FROM Doctors WHERE Username = %s)")
                 params.append(username)
-            else:
-                query += " WHERE 1=1"
 
             if year:
                 conditions.append("YEAR(AppointmentDate) = %s")
@@ -412,11 +410,11 @@ def view_appointments(conn, role, username=None, year=None, month=None, day=None
                 params.append(day)
 
             if conditions:
-                query += " AND " + " AND ".join(conditions)
+                base_query += " WHERE " + " AND ".join(conditions)
 
-            query += " ORDER BY AppointmentDate DESC, AppointmentTime DESC"
+            base_query += " ORDER BY AppointmentDate DESC, AppointmentTime DESC"
 
-            cursor.execute(query, tuple(params))
+            cursor.execute(base_query, tuple(params))
             return True, cursor.fetchall()
     except Exception as e:
         return False, f"Database error: {e}"
