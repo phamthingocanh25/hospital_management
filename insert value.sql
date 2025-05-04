@@ -86,6 +86,14 @@ INSERT INTO Medicine (MedicineName, Quantity, MedicineCost) VALUES
 ('Salbutamol Inhaler', 100, 55000.00),     -- ID: 4
 ('Loratadine 10mg', 400, 1200.00);         -- ID: 5
 
+-- Bảng MedicineBatch
+INSERT INTO MedicineBatch (MedicineID, BatchNumber, Quantity, ImportDate, ExpiryDate, SupplierName, MedicineCost, Status) VALUES
+(1, 'PARAC-001', 500, '2025-01-01', '2027-01-01', 'PharmaX', 500.00, 'Active'),
+(2, 'AMOX-001', 200, '2025-03-01', '2027-03-01', 'MedSupply', 1500.00, 'Active'),
+(3, 'OMEP-001', 100, '2025-02-01', '2027-02-01', 'HealthCo', 2500.00, 'Active'),
+(4, 'SALB-001', 50, '2025-04-01', '2027-04-01', 'PharmaX', 55000.00, 'Active'),
+(5, 'LORA-001', 400, '2025-05-01', '2027-05-01', 'MedSupply', 1200.00, 'Active');
+
 -- 10. Bảng Invoices (Đã thêm cột IsBHYTApplied kiểu BOOLEAN/TINYINT(1))
 INSERT INTO Invoices (PatientID, InvoiceDate, RoomCost, MedicineCost, ServiceCost, PaymentStatus, TotalAmount, IsBHYTApplied) VALUES
 (1, '2025-04-15', 500000.00, 15000.00, 250000.00, 'Paid', 765000.00, TRUE),       -- BN 1, Có BHYT, Đã thanh toán
@@ -121,9 +129,17 @@ INSERT INTO PrescriptionDetails (PrescriptionID, MedicineID, Dosage, Frequency, 
 (3, 3, '20mg', '1 lần/ngày trước ăn sáng 30 phút', '1 tháng', NULL, 30), -- Giả sử MedicineID 3 là Omeprazole
 (4, 5, '10mg', '1 lần/ngày vào buổi tối', '14 ngày', NULL, 14); -- Giả sử MedicineID 5 là Loratadine
 -- 13. Bảng Insurance 
-INSERT INTO Insurance (PatientID, InsuranceProvider, PolicyNumber, BHYTCardNumber, EffectiveDate, EndDate,CoveragePercent, CoverageDetails) VALUES
+INSERT INTO Insurance (PatientID, InsuranceProvider, PolicyNumber, BHYTCardNumber, EffectiveDate, EndDate, CoverageDetails) VALUES
 (1, 'Bảo hiểm Y tế Nhà nước', '4543456', 'HS12345678', '2025-01-01', '2025-12-31', 'Chi trả 80% chi phí khám chữa bệnh,50% tiền phòng theo quy định BHYT'),
 (2, 'Bảo hiểm Y tế Bắt buộc', '34565432', 'HS4953045685', '2024-07-01', '2026-06-30', 'Chi trả 20% chi phí một số thuốc đặc trị'),
 (4, 'Bảo hiểm Y tế Nhà nước', '234565432', 'JT355453332', '2024-09-16', '2025-09-15', 'Chi trả hầu hết (100%) chi phí KCB theo quy định'),
 (5, 'Bảo Việt HealthCare', 'BVHC/2024/10594', '354534', '2025-04-01', '2026-03-31', 'Bảo lãnh chi phí phẫu thuật nội trú');
 
+INSERT INTO PatientServices 
+(PatientID, ServiceID, DoctorID, ServiceDate, Quantity, CostAtTime, InvoiceID, Notes)
+VALUES
+(1, 1, 2, '2025-05-01', 1, 120000, NULL, 'Xét nghiệm định kỳ'),
+(1, 3, 2, '2025-05-01', 1, 250000, NULL, NULL),
+(2, 2, 3, '2025-04-30', 1, 180000, NULL, 'Chẩn đoán đau bụng'),
+(3, 4, 1, '2025-05-02', 1, 150000, NULL, 'Theo dõi tim mạch'),
+(3, 5, 1, '2025-05-02', 1, 100000, NULL, 'Trước ăn sáng');

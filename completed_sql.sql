@@ -24,13 +24,15 @@ CREATE TABLE RoomTypes (
 ) COMMENT = 'Định nghĩa các loại phòng bệnh và chi phí cơ bản';
 
 -- Bảng Bệnh nhân (Patients)
+DROP TABLE IF EXISTS Patients;
 CREATE TABLE Patients (
     PatientID INT AUTO_INCREMENT PRIMARY KEY,
     PatientName VARCHAR(100) NOT NULL,
     DateOfBirth DATE NULL,
     Gender ENUM('M', 'F', 'O') NULL COMMENT 'M: Male, F: Female, O: Other',
     Address VARCHAR(255) NULL,
-    PhoneNumber VARCHAR(20) NULL UNIQUE COMMENT 'Số điện thoại nên là duy nhất'
+    PhoneNumber VARCHAR(20) NULL UNIQUE COMMENT 'Số điện thoại nên là duy nhất',
+    Status ENUM('active', 'disabled') DEFAULT 'active'
 ) COMMENT = 'Thông tin cơ bản của bệnh nhân';
 
 -- Bảng Bác sĩ (Doctors)
@@ -42,6 +44,7 @@ CREATE TABLE Doctors (
     DoctorUser VARCHAR(50) UNIQUE COMMENT 'Tên đăng nhập liên kết với tài khoản user (nếu có)',
     PhoneNumber VARCHAR(20) NULL UNIQUE,
     Email VARCHAR(100) NULL UNIQUE,
+    status ENUM('active', 'disabled') DEFAULT 'active',
     FOREIGN KEY (DepartmentID) REFERENCES Departments(DepartmentID)
         ON DELETE SET NULL -- Nếu xóa khoa, bác sĩ không thuộc khoa nào nhưng vẫn tồn tại
         ON UPDATE CASCADE
@@ -55,6 +58,21 @@ CREATE TABLE Medicine (
     Quantity INT NOT NULL DEFAULT 0 CHECK (Quantity >= 0) COMMENT 'Số lượng tồn kho',
     MedicineCost DECIMAL(10, 2) NOT NULL CHECK (MedicineCost >= 0) COMMENT 'Giá mỗi đơn vị thuốc'
 ) COMMENT = 'Quản lý kho thuốc';
+
+-- Bảng quản lý kho thuốc (MedicineBatch)
+DROP TABLE IF EXISTS MedicineBatch;
+CREATE TABLE MedicineBatch (
+    BatchID INT AUTO_INCREMENT PRIMARY KEY,
+    MedicineID INT NOT NULL,
+    BatchNumber VARCHAR(100) NOT NULL,
+    Quantity INT NOT NULL,
+    ImportDate DATE NOT NULL,
+    ExpiryDate DATE NOT NULL,
+    SupplierName VARCHAR(100) NOT NULL,
+    MedicineCost DECIMAL(10, 2) NOT NULL,
+    Status ENUM('Active', 'Discontinued') DEFAULT 'Active',
+    FOREIGN KEY (MedicineID) REFERENCES Medicine(MedicineID)
+);
 
 -- Bảng Kho vật tư (Inventory)
 CREATE TABLE Inventory (
@@ -277,6 +295,10 @@ CREATE INDEX idx_rooms_patient ON Rooms(CurrentPatientID);
 -- Medicine
 CREATE INDEX idx_medicine_name ON Medicine(MedicineName);
 
+-- MedicineBatch
+CREATE INDEX idx_medicineid ON MedicineBatch(MedicineID);
+CREATE INDEX idx_batchnumber ON MedicineBatch(BatchNumber);
+
 -- Services
 CREATE INDEX idx_services_name ON Services(ServiceName);
 CREATE INDEX idx_services_code ON Services(ServiceCode);
@@ -335,11 +357,24 @@ JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
 JOIN Departments d ON r.DepartmentID = d.DepartmentID
 WHERE r.Status = 'Available';
 
+CREATE VIEW vw_MedicineBatchDetails AS
+SELECT 
+    mb.BatchID,
+    m.MedicineName,
+    mb.BatchNumber,
+    mb.Quantity,
+    mb.ImportDate,
+    mb.ExpiryDate,
+    mb.SupplierName,
+    mb.Status
+FROM 
+    MedicineBatch mb
+JOIN Medicine m ON mb.MedicineID = m.MedicineID
+
 
 -- 2. Stored Procedures
 
 -- SP to get appointments for a specific doctor
-DROP PROCEDURE IF EXISTS sp_GetDoctorAppointments;
 DELIMITER //
 CREATE PROCEDURE sp_GetDoctorAppointments(IN p_doctor_id INT, IN p_start_date DATE, IN p_end_date DATE)
 BEGIN
@@ -420,6 +455,24 @@ BEGIN
 END //
 DELIMITER ;
 
+DELIMITER //
+
+CREATE PROCEDURE sp_AddMedicineBatch(
+    IN p_medicine_id INT,
+    IN p_batch_number VARCHAR(100),
+    IN p_quantity INT,
+    IN p_import_date DATE,
+    IN p_expiry_date DATE,
+    IN p_supplier_name VARCHAR(155),
+    IN p_medicine_cost DECIMAL(10, 2)
+)
+BEGIN
+    INSERT INTO MedicineBatch (MedicineID, BatchNumber, Quantity, ImportDate, ExpiryDate, SupplierName, MedicineCost)
+    VALUES (p_medicine_id, p_batch_number, p_quantity, p_import_date, p_expiry_date, p_supplier_name, p_medicine_cost);
+END //
+
+DELIMITER ;
+
 
 -- 3. Functions
 
@@ -442,6 +495,20 @@ BEGIN
 END //
 DELIMITER ;
 
+DELIMITER //
+
+CREATE FUNCTION fn_GetTotalStockByMedicine(p_medicine_id INT) 
+RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE total_quantity INT;
+    SELECT SUM(Quantity) INTO total_quantity
+    FROM MedicineBatch
+    WHERE MedicineID = p_medicine_id AND Status = 'Active';  -- Lọc theo trạng thái active
+    RETURN IFNULL(total_quantity, 0);
+END //
+
+DELIMITER ;
 
 -- 4. Triggers
 
@@ -467,9 +534,9 @@ DELIMITER ;
 
 -- Trigger to update medicine stock when prescribed (VERY SIMPLISTIC - assumes stock is available)
 -- A more robust system would check stock BEFORE allowing prescription detail insertion or have a separate dispensing step.
-DROP TRIGGER IF EXISTS trg_UpdateMedicineStockOnPrescribe;
+DROP TRIGGER IF EXISTS trg_UpdateMedicinetockOnPrescribe;
 DELIMITER //
-CREATE TRIGGER trg_UpdateMedicineStockOnPrescribe
+CREATE TRIGGER trg_UpdateMedicinetockOnPrescribe
 AFTER INSERT ON PrescriptionDetails
 FOR EACH ROW
 BEGIN
@@ -480,6 +547,18 @@ BEGIN
 END //
 DELIMITER ;
 
+DELIMITER //
+
+CREATE TRIGGER trg_UpdateStockAfterInsert
+AFTER INSERT ON MedicineBatch
+FOR EACH ROW
+BEGIN
+    UPDATE Medicine
+    SET Quantity = Quantity + NEW.Quantity
+    WHERE MedicineID = NEW.MedicineID;
+END //
+
+DELIMITER ;
 
 -- 5. Database Security and Administration
 
@@ -488,12 +567,20 @@ DROP USER IF EXISTS 'admin_hms'@'localhost';
 DROP USER IF EXISTS 'doctor_hms'@'localhost';
 DROP USER IF EXISTS 'receptionist_hms'@'localhost';
 DROP USER IF EXISTS 'accountant_hms'@'localhost';
+DROP USER IF EXISTS 'pharmacist_hms'@'localhost';
+DROP USER IF EXISTS 'nurse_hms'@'localhost';
+DROP USER IF EXISTS 'warehouse_manager_hms'@'localhost';
+DROP USER IF EXISTS 'director_hms'@'localhost';
 
 -- Create users with strong passwords (replace 'strong_password_X'!)
 CREATE USER 'admin_hms'@'localhost' IDENTIFIED BY 'strong_password_admin';
 CREATE USER 'doctor_hms'@'localhost' IDENTIFIED BY 'strong_password_doctor';
 CREATE USER 'receptionist_hms'@'localhost' IDENTIFIED BY 'strong_password_recept';
 CREATE USER 'accountant_hms'@'localhost' IDENTIFIED BY 'strong_password_account';
+CREATE USER 'pharmacist_hms'@'localhost' IDENTIFIED BY 'strong_password_pharmacist';
+CREATE USER 'warehouse_manager_hms'@'localhost' IDENTIFIED BY 'strong_password_warehouse';
+CREATE USER 'nurse_hms'@'localhost' IDENTIFIED BY 'strong_password_nurse';
+CREATE USER 'director_hms'@'localhost' IDENTIFIED BY 'strong_password_director';
 
 -- Grant Privileges
 -- Admin: Full control
@@ -502,7 +589,6 @@ GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'admin_hms'@'localhost';
-
 
 -- Doctor: Read patient, their appointments, manage prescriptions, read medicine/services/insurance/rooms
 GRANT SELECT ON hospitalmanagementsystem.Patients TO 'doctor_hms'@'localhost';
@@ -519,7 +605,6 @@ GRANT SELECT ON hospitalmanagementsystem.Departments TO 'doctor_hms'@'localhost'
 GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'doctor_hms'@'localhost'; -- View services provided
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'doctor_hms'@'localhost';
 
-
 -- Receptionist: Manage patients, appointments, rooms, contacts, insurance. Read doctors/departments.
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Patients TO 'receptionist_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Appointments TO 'receptionist_hms'@'localhost';
@@ -532,7 +617,6 @@ GRANT SELECT ON hospitalmanagementsystem.RoomTypes TO 'receptionist_hms'@'localh
 GRANT SELECT ON hospitalmanagementsystem.Services TO 'receptionist_hms'@'localhost'; -- To know available services
 GRANT SELECT, INSERT ON hospitalmanagementsystem.PatientServices TO 'receptionist_hms'@'localhost'; -- Record basic service usage maybe? Or just view? Adjust as needed.
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'receptionist_hms'@'localhost'; -- To check doctor schedules
-
 
 -- Accountant: Manage invoices. Read patients(limited), services, medicine, rooms, insurance for billing.
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Invoices TO 'accountant_hms'@'localhost';
@@ -547,6 +631,28 @@ GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient T
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'accountant_hms'@'localhost'; -- Can add services to invoice
 GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'accountant_hms'@'localhost';
 
+-- Pharmacist: Manage Medicine, batches, and inventory.
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Medicine TO 'pharmacist_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.MedicineBatch TO 'pharmacist_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Inventory TO 'pharmacist_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddMedicineBatch TO 'pharmacist_hms'@'localhost';
+
+-- Warehouse Manager: Manage inventory.
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Inventory TO 'warehouse_manager_hms'@'localhost';
+
+-- Nurse: Assist doctors, view appointments, patient records.
+GRANT SELECT ON hospitalmanagementsystem.Patients TO 'nurse_hms'@'localhost';
+GRANT SELECT, UPDATE ON hospitalmanagementsystem.Appointments TO 'nurse_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.Prescription TO 'nurse_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.PrescriptionDetails TO 'nurse_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'nurse_hms'@'localhost';
+
+-- Director: Full overview of hospital operations and reports.
+GRANT ALL PRIVILEGES ON hospitalmanagementsystem.* TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'director_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'director_hms'@'localhost';
 
 -- Apply the permission changes
 FLUSH PRIVILEGES;
