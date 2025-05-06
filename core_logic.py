@@ -10,7 +10,8 @@ import bcrypt
 import random
 import string
 from fpdf import FPDF
-
+import tkinter as tk
+from mysql.connector import MySQLConnection, Error
 # Load environment variables from .env file
 load_dotenv()
 
@@ -18,7 +19,7 @@ load_dotenv()
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'MaiAnh<3'),
+    'password': os.getenv('DB_PASSWORD', 'anh@2502'),
     'database': os.getenv('DB_NAME', 'hospitalmanagementsystem'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
@@ -85,38 +86,489 @@ def is_strong_password(password):
         if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
             return False, "❌ Password must contain at least one special character."
         return True, None
+def search_system_users(conn, username=None, role=None):
+    try:
+        with conn.cursor() as cursor:
+            # Base query selecting relevant user information
+            query = """
+                SELECT
+                    id AS UserID, -- Alias id to UserID for consistency with GUI expectation
+                    username AS Username,
+                    role AS Role,
+                    CASE
+                        WHEN IsActive = 1 THEN 'Active'
+                        ELSE 'Inactive'
+                    END AS Status -- Map IsActive boolean/tinyint to string status
+                FROM users
+                WHERE 1=1
+            """
+            params = []
 
-from mysql.connector import MySQLConnection, Error
+            # Add conditions based on provided filters
+            if username:
+                query += " AND username LIKE %s"
+                params.append(f"%{username}%") # Use LIKE for partial matching
 
+            if role:
+                # Ensure role is converted to lowercase for case-insensitive matching if needed
+                # Assuming roles in DB are stored consistently (e.g., lowercase)
+                query += " AND role = %s"
+                params.append(role.lower()) # Match against lowercase role
+
+            query += " ORDER BY Username ASC" # Order results by username
+
+            cursor.execute(query, tuple(params))
+            users = cursor.fetchall()
+
+            # Return True and the list of users (which might be empty)
+            return True, users
+
+    except MySQLError as e:
+        print(f"Database Error in search_system_users: {e}")
+        # Potentially rollback if this function were part of a larger transaction
+        # conn.rollback()
+        return False, f"Database error searching users: {e}"
+    except Exception as e:
+        print(f"Unexpected Error in search_system_users: {e}")
+        # conn.rollback() # If part of a transaction
+        return False, f"An unexpected error occurred: {e}"
+
+def get_patient_prescriptions(conn, patient_id):
+    """
+    Fetches all prescription details (medicines, quantity, cost) for a given patient,
+    regardless of whether they have been invoiced yet. Suitable for invoice creation.
+    """
+    if not patient_id:
+        return False, "Patient ID is required."
+
+    try:
+        with conn.cursor() as cursor:
+            # This query joins Prescription, PrescriptionDetails, and Medicine
+            # to get all necessary details for the invoice treeview.
+            sql = """
+                SELECT
+                    pd.PrescriptionDetailID, -- Good to have for potential future actions
+                    p.PrescriptionID,
+                    p.PrescriptionDate,
+                    m.MedicineName,
+                    pd.Dosage,
+                    pd.QuantityPrescribed,
+                    m.MedicineCost -- Get the current cost from the Medicine table
+                FROM PrescriptionDetails pd
+                JOIN Prescription p ON pd.PrescriptionID = p.PrescriptionID
+                JOIN Medicine m ON pd.MedicineID = m.MedicineID
+                WHERE p.PatientID = %s
+                -- Optional: Add criteria here if you only want prescriptions
+                -- within a certain date range or those not yet fully invoiced.
+                -- For creating a new invoice, usually you want all recent/unbilled items.
+                ORDER BY p.PrescriptionDate DESC, pd.PrescriptionDetailID ASC;
+            """
+            cursor.execute(sql, (patient_id,))
+            prescriptions_details = cursor.fetchall()
+
+            # Return True even if the list is empty, the GUI will handle 'No items found'.
+            return True, prescriptions_details
+
+    except MySQLError as e:
+        print(f"Database Error fetching prescription details for patient {patient_id}: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected Error fetching prescription details for patient {patient_id}: {e}")
+        return False, f"Unexpected Error: {e}"
+
+
+def get_all_services(conn):
+    """Placeholder: Fetches all available services."""
+    print("WARNING: get_all_services called but not implemented.")
+    # In a real implementation, query the Services table
+    try:
+         with conn.cursor() as cursor:
+             cursor.execute("SELECT ServiceID, ServiceName, ServiceCost FROM Services ORDER BY ServiceName")
+             services = cursor.fetchall()
+             return True, services
+    except MySQLError as e:
+         print(f"DB Error in get_all_services: {e}")
+         return False, f"Database error: {e}"
+    # return False, "Not Implemented" # Return failure until implemented
+def get_doctor_dashboard_stats(conn, doctor_id):
+    """
+    Lấy các số liệu thống kê cho dashboard của bác sĩ.
+    Ví dụ: số lịch hẹn hôm nay, số bệnh nhân gần đây, số đơn thuốc gần đây.
+    """
+    stats = {"appointments": 0, "patients": 0, "prescriptions": 0} # Giá trị mặc định
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    try:
+        with conn.cursor() as cursor:
+            # Ví dụ: Đếm lịch hẹn hôm nay của bác sĩ này
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM Appointments
+                WHERE DoctorID = %s AND AppointmentDate = %s AND Status = 'Scheduled'
+            """, (doctor_id, today_str))
+            result_appts = cursor.fetchone()
+            if result_appts:
+                stats["appointments"] = result_appts.get('count', 0)
+
+            # Ví dụ: Đếm số bệnh nhân duy nhất có lịch hẹn với bác sĩ này trong 7 ngày qua
+            # (Logic này có thể cần điều chỉnh tùy theo yêu cầu)
+            cursor.execute("""
+                SELECT COUNT(DISTINCT PatientID) as count
+                FROM Appointments
+                WHERE DoctorID = %s AND AppointmentDate BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND CURDATE()
+            """, (doctor_id,))
+            result_patients = cursor.fetchone()
+            if result_patients:
+                stats["patients"] = result_patients.get('count', 0)
+
+            # Ví dụ: Đếm số đơn thuốc bác sĩ này tạo trong 7 ngày qua
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM Prescription
+                WHERE DoctorID = %s AND PrescriptionDate BETWEEN DATE_SUB(CURDATE(), INTERVAL 7 DAY) AND CURDATE()
+            """, (doctor_id,))
+            result_presc = cursor.fetchone()
+            if result_presc:
+                stats["prescriptions"] = result_presc.get('count', 0)
+
+        return True, stats # Trả về thành công và dictionary chứa số liệu
+
+    except MySQLError as e:
+        print(f"Lỗi CSDL khi lấy dashboard stats cho bác sĩ {doctor_id}: {e}")
+        return False, f"Lỗi CSDL: {e}"
+    except Exception as e:
+        print(f"Lỗi không mong đợi khi lấy dashboard stats cho bác sĩ {doctor_id}: {e}")
+        return False, f"Lỗi không mong đợi: {e}"
+def get_room_types_with_availability(conn):
+     """Placeholder: Fetches room types and their availability."""
+     print("WARNING: get_room_types_with_availability called but not implemented.")
+     # In a real implementation, query RoomTypes and join with Rooms to count status
+     try:
+         with conn.cursor() as cursor:
+             cursor.execute("""
+                 SELECT
+                     rt.RoomTypeID,
+                     rt.TypeName,
+                     rt.BaseCost,
+                     COUNT(r.RoomID) AS TotalRooms,
+                     SUM(CASE WHEN r.Status = 'Available' THEN 1 ELSE 0 END) AS AvailableCount
+                 FROM RoomTypes rt
+                 LEFT JOIN Rooms r ON rt.RoomTypeID = r.RoomTypeID
+                 GROUP BY rt.RoomTypeID, rt.TypeName, rt.BaseCost
+                 ORDER BY rt.TypeName;
+             """)
+             room_types_data = cursor.fetchall()
+             # Ensure counts are integers
+             for room in room_types_data:
+                 room['TotalRooms'] = int(room.get('TotalRooms', 0))
+                 room['AvailableCount'] = int(room.get('AvailableCount', 0))
+             return True, room_types_data
+     except MySQLError as e:
+         print(f"DB Error in get_room_types_with_availability: {e}")
+         return False, f"Database error: {e}"
+     # return False, "Not Implemented" # Return failure until implemented
+def get_departments_list(conn):
+    """Fetches a list of departments (ID and Name) for dropdowns."""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT DepartmentID, DepartmentName FROM Departments ORDER BY DepartmentName")
+            departments = cursor.fetchall()
+            return True, departments
+    except MySQLError as e:
+        print(f"DB Error fetching departments list: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected error fetching departments list: {e}")
+        return False, f"Unexpected Error: {e}"
+
+def create_admission_order(conn, patient_id, doctor_id, department_id, reason, notes=None):
+    """Creates a new admission order record in the database."""
+    if not all([patient_id, doctor_id, department_id, reason]):
+        return False, "Patient ID, Doctor ID, Department ID, and Reason are required."
+    try:
+        with conn.cursor() as cursor:
+            # Validate Patient ID
+            cursor.execute("SELECT PatientID FROM Patients WHERE PatientID = %s AND Status = 'active'", (patient_id,))
+            if not cursor.fetchone():
+                return False, f"Patient ID {patient_id} not found or inactive."
+
+            # Validate Doctor ID (assuming Doctors table has DoctorID as PK)
+            cursor.execute("SELECT DoctorID FROM Doctors WHERE DoctorID = %s AND status = 'active'", (doctor_id,))
+            if not cursor.fetchone():
+                return False, f"Doctor ID {doctor_id} not found or inactive."
+
+            # Validate Department ID
+            cursor.execute("SELECT DepartmentID FROM Departments WHERE DepartmentID = %s", (department_id,))
+            if not cursor.fetchone():
+                return False, f"Department ID {department_id} not found."
+
+            
+            sql = """
+                INSERT INTO AdmissionOrders
+                (PatientID, DoctorID, DepartmentID, OrderDate, Reason, Notes, Status)
+                VALUES (%s, %s, %s, CURDATE(), %s, %s, %s)
+            """
+            cursor.execute(sql, (patient_id, doctor_id, department_id, reason, notes, 'Pending'))
+            conn.commit()
+            return True, f"Admission order created successfully for Patient ID {patient_id}."
+
+    except MySQLError as e:
+        conn.rollback()
+        print(f"DB error creating admission order: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        conn.rollback()
+        print(f"Unexpected error creating admission order: {e}")
+        return False, f"Unexpected Error: {e}"
+def get_pending_admission_orders(conn):
+    """Retrieve all admission orders with 'Pending' status."""
+    try:
+        with conn.cursor() as cursor:
+            # Join with Patients, Doctors, Departments to get names
+            sql = """
+                SELECT
+                    ao.AdmissionOrderID as OrderID,
+                    ao.PatientID,
+                    p.PatientName,
+                    ao.DoctorID,
+                    d.DoctorName,
+                    ao.DepartmentID,
+                    dep.DepartmentName,
+                    ao.OrderDate,
+                    ao.Reason,
+                    p.DateOfBirth,
+                    p.Gender,
+                    p.Address,
+                    p.PhoneNumber
+                FROM AdmissionOrders ao
+                JOIN Patients p ON ao.PatientID = p.PatientID
+                JOIN Doctors d ON ao.DoctorID = d.DoctorID
+                JOIN Departments dep ON ao.DepartmentID = dep.DepartmentID
+                WHERE ao.Status = 'Pending'
+                ORDER BY ao.OrderDate ASC, ao.AdmissionOrderID ASC
+            """
+            cursor.execute(sql)
+            pending_orders = cursor.fetchall()
+            return True, pending_orders
+    except MySQLError as e:
+        print(f"DB error fetching pending admission orders: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected error fetching pending admission orders: {e}")
+        return False, f"Unexpected Error: {e}"
+
+def get_admission_order_details(conn, order_id):
+    """Get detailed information about a specific admission order."""
+    try:
+        with conn.cursor() as cursor:
+            # Get basic order info
+            sql = """
+                SELECT
+                    ao.AdmissionOrderID as OrderID,
+                    ao.PatientID,
+                    p.PatientName,
+                    p.DateOfBirth,
+                    p.Gender,
+                    p.Address,
+                    p.PhoneNumber,
+                    ao.DoctorID,
+                    d.DoctorName,
+                    ao.DepartmentID,
+                    dep.DepartmentName,
+                    ao.OrderDate,
+                    ao.Reason,
+                    ao.Notes,
+                    (SELECT InsuranceProvider FROM Insurance 
+                     WHERE PatientID = ao.PatientID 
+                     AND EffectiveDate <= CURDATE() 
+                     AND EndDate >= CURDATE() 
+                     LIMIT 1) as InsuranceProvider
+                FROM AdmissionOrders ao
+                JOIN Patients p ON ao.PatientID = p.PatientID
+                JOIN Doctors d ON ao.DoctorID = d.DoctorID
+                JOIN Departments dep ON ao.DepartmentID = dep.DepartmentID
+                WHERE ao.AdmissionOrderID = %s
+            """
+            cursor.execute(sql, (order_id,))
+            order_details = cursor.fetchone()
+            
+            if not order_details:
+                return False, f"Admission order {order_id} not found"
+                
+            return True, order_details
+    except MySQLError as e:
+        print(f"DB error fetching admission order details: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected error fetching admission order details: {e}")
+        return False, f"Unexpected Error: {e}"
+
+def process_admission_order(conn, order_id, patient_id, room_id, username):
+    """Process an admission order by assigning a room and updating statuses."""
+    try:
+        with conn.cursor() as cursor:
+            # 0. Get Receptionist User ID
+            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+            receptionist = cursor.fetchone()
+            if not receptionist:
+                return False, f"Receptionist user '{username}' not found."
+            receptionist_user_id = receptionist['id']
+
+            # 1. Check Admission Order Status
+            cursor.execute("SELECT PatientID, Status FROM AdmissionOrders WHERE AdmissionOrderID = %s", (order_id,))
+            order = cursor.fetchone()
+            if not order:
+                return False, f"Admission Order ID {order_id} not found."
+            if order['Status'] != 'Pending':
+                return False, f"Admission Order {order_id} is not in 'Pending' status (Current: {order['Status']})."
+            if str(order['PatientID']) != str(patient_id):
+                return False, f"Patient ID mismatch (Order: {order['PatientID']}, Provided: {patient_id})."
+
+            # 2. Check Room Status
+            cursor.execute("SELECT Status FROM Rooms WHERE RoomID = %s", (room_id,))
+            room = cursor.fetchone()
+            if not room:
+                return False, f"Room ID {room_id} not found."
+            if room['Status'] != 'Available':
+                return False, f"Room {room_id} is not 'Available' (Current: {room['Status']}). Cannot assign."
+
+            # 3. Update Room: Set Status='Occupied', assign PatientID
+            cursor.execute("UPDATE Rooms SET Status = 'Occupied', CurrentPatientID = %s WHERE RoomID = %s", 
+                         (patient_id, room_id))
+
+            # 4. Update Admission Order: Set Status='Processed', record processor and time, assigned room
+            cursor.execute("""
+                UPDATE AdmissionOrders
+                SET Status = 'Processed',
+                    ProcessedByUserID = %s,
+                    ProcessedDate = NOW(),
+                    AssignedRoomID = %s
+                WHERE AdmissionOrderID = %s
+            """, (receptionist_user_id, room_id, order_id))
+
+            # 5. Update Patient Status to 'Inpatient'
+            cursor.execute("UPDATE Patients SET Status = 'Inpatient' WHERE PatientID = %s", (patient_id,))
+
+            conn.commit()
+            return True, f"Admission Order {order_id} processed successfully. Patient {patient_id} assigned to Room {room_id}."
+
+    except MySQLError as e:
+        conn.rollback()
+        print(f"DB error processing admission: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        conn.rollback()
+        print(f"Unexpected error processing admission: {e}")
+        return False, f"Unexpected Error: {e}"
+
+def get_available_rooms_by_department(conn, department_id):
+    """Retrieve available rooms for a specific department."""
+    if not department_id:
+        return False, "Department ID is required."
+    try:
+        with conn.cursor() as cursor:
+            # Join with RoomTypes to display type name and cost
+            sql = """
+                SELECT 
+                    r.RoomID as id,
+                    r.RoomNumber as number,
+                    rt.TypeName as type,
+                    rt.BaseCost as cost
+                FROM Rooms r
+                JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                WHERE r.DepartmentID = %s AND r.Status = 'Available'
+                ORDER BY r.RoomNumber ASC
+            """
+            cursor.execute(sql, (department_id,))
+            available_rooms = cursor.fetchall()
+            return True, available_rooms
+    except MySQLError as e:
+        print(f"DB error fetching available rooms: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected error fetching available rooms: {e}")
+        return False, f"Unexpected Error: {e}"
+
+
+
+
+def get_active_insurance_info(conn, patient_id):
+    """Placeholder: Fetches active insurance info."""
+    print(f"WARNING: get_active_insurance_info called for patient {patient_id} but not fully implemented.")
+    # In a real implementation, query the Insurance table with date checks
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT * FROM Insurance
+                WHERE PatientID = %s
+                  AND EffectiveDate <= CURDATE()
+                  AND EndDate >= CURDATE()
+                ORDER BY EndDate DESC
+                LIMIT 1
+            """, (patient_id,))
+            insurance = cursor.fetchone()
+            return insurance # Returns dict or None
+    except MySQLError as e:
+        print(f"DB Error in get_active_insurance_info: {e}")
+        return None # Indicate failure or no insurance found
+    
 def authenticate_user(username, password):
-    """Authenticate user and return role and role-specific ID"""
+    """Authenticate user and return details or error message."""
     try:
         conn = get_db_connection()
         if not conn:
+            # Return None for connection if it fails, plus an error message
             return None, None, None, None, "Database connection failed"
 
-        with conn.cursor() as cursor:  # Ensure that the result is in dictionary format
+        with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT u.username, u.password, u.role,
-                       CASE WHEN u.role = 'doctor' THEN d.DoctorID ELSE NULL END as role_id
+                SELECT u.id as user_db_id, u.username, u.password, u.role, u.IsActive,
+                       CASE
+                           WHEN u.role = 'doctor' THEN d.DoctorID
+                           ELSE NULL
+                       END as role_id
                 FROM users u
-                LEFT JOIN Doctors d ON u.username = d.DoctorUser
+                LEFT JOIN Doctors d ON u.username = d.DoctorUser AND d.status = 'active'
                 WHERE BINARY u.username = %s
-            """, (username,))
+            """, (username,)) # BINARY ensures case-sensitive match
 
             user = cursor.fetchone()
 
             if user:
-                db_password = user['password']
-                # Kiểm tra mật khẩu (bcrypt sẽ tự động so sánh với mật khẩu đã được mã hóa)
-                if bcrypt.checkpw(password.encode('utf-8'), db_password.encode('utf-8')):
+                # Check if account is active
+                if not user.get('IsActive', True): # Default to True if column doesn't exist yet
+                     conn.close()
+                     return None, None, None, None, "User account is inactive."
+
+                db_password_hash = user['password']
+                # Check password using bcrypt
+                if bcrypt.checkpw(password.encode('utf-8'), db_password_hash.encode('utf-8')):
+                    # Special check for doctors: ensure they have a linked, active DoctorID
+                    if user['role'] == 'doctor' and user['role_id'] is None:
+                        conn.close()
+                        return None, None, None, None, "Doctor profile not linked or inactive."
+
+                    # Return successful login details including the connection object
                     return user['username'], user['role'], conn, user['role_id'], None
                 else:
+                    conn.close()
                     return None, None, None, None, "Incorrect password"
             else:
+                conn.close()
                 return None, None, None, None, "User not found"
+
     except MySQLError as e:
-        return None, None, None, None, f"An error occurred: {str(e)}"
+        # Close connection if it was opened before the error
+        if 'conn' in locals() and conn and conn.open:
+             conn.close()
+        print(f"DB Error in authenticate_user: {e}") # Log for debugging
+        return None, None, None, None, f"Database error during login." # Generic error to user
+    except Exception as e:
+         # Catch other potential errors
+         if 'conn' in locals() and conn and conn.open:
+             conn.close()
+         print(f"Unexpected Error in authenticate_user: {e}") # Log for debugging
+         return None, None, None, None, "An unexpected error occurred during login."
 
 def initialize_admin():
     """Create default admin account if not exists"""
@@ -146,6 +598,11 @@ def initialize_admin():
 # User Management
 def register_user(conn, username, password, confirm_password, role):
     """Register user from GUI input"""
+    valid_roles = ["admin", "doctor", "receptionist", "nurse", "director", "pharmacist", "inventory_manager"]
+
+    if role.lower() not in valid_roles:
+        return False, f"❌ Unsupported role: '{role}'. Allowed roles: {', '.join(valid_roles)}"
+
     if not is_valid_username(username)[0]:
         return False, is_valid_username(username)[1]
     
@@ -154,10 +611,6 @@ def register_user(conn, username, password, confirm_password, role):
     
     if not is_strong_password(password)[0]:
         return False, "❌ Password must be at least 8 characters long and contain a mix of uppercase, lowercase, numbers, and special characters."
-
-    valid_roles = ['admin', 'accountant', 'receptionist', 'nurse', 'pharmacist', 'director', 'inventory_manager']
-    if role.lower() not in valid_roles:
-        return False, f"❌ Invalid role. Must be one of: {', '.join(valid_roles)}"
 
     try:
         with conn.cursor() as cursor:
@@ -179,30 +632,41 @@ def register_user(conn, username, password, confirm_password, role):
 def change_password(conn, username, old_password, new_password):
     """Change password for the user"""
     try:
+        # Validate new password strength first
+        is_strong, msg = is_strong_password(new_password)
+        if not is_strong:
+            return False, msg # Return the strength error message
+
         with conn.cursor() as cursor:
-            # Kiểm tra mật khẩu cũ
-            cursor.execute("SELECT password FROM Users WHERE Username = %s", (username,))
-            result = cursor.fetchone()  # Lấy một dòng duy nhất từ kết quả
-            
-            if result:
-                curr_pass = result['password']  # Truy cập mật khẩu cũ qua chỉ mục (index) 0
-                if bcrypt.checkpw(old_password.encode('utf-8'), curr_pass.encode('utf-8')):
-                    # Mật khẩu cũ đúng, tiến hành cập nhật mật khẩu mới
-                    if new_password == old_password:
-                        return False, "❌ New password cannot be the same as the old password."
-                    else:
-                        # Mật khẩu mới không trùng mật khẩu cũ, tiến hành cập nhật
-                        if not is_strong_password(new_password)[0]:
-                            return False, "❌ Password must be at least 8 characters long and contain a mix of uppercase, lowercase, numbers, and special characters."
-                        hashed_new_password = hash_password(new_password)
-                        cursor.execute("UPDATE Users SET Password = %s WHERE Username = %s", (hashed_new_password, username))
-                        conn.commit()
-                    return True, "✅ Password changed successfully."
-            else:
+            cursor.execute("SELECT password FROM users WHERE username = %s", (username,))
+            user = cursor.fetchone()
+
+            if not user:
                 return False, "❌ User not found."
-            
+
+            current_hashed_pw = user['password']
+            if not bcrypt.checkpw(old_password.encode('utf-8'), current_hashed_pw.encode('utf-8')):
+                return False, "❌ Current password is incorrect."
+
+            # Check if new password is same as old
+            if bcrypt.checkpw(new_password.encode('utf-8'), current_hashed_pw.encode('utf-8')):
+                 return False, "❌ New password cannot be the same as the old password."
+
+            # Hash and update the new password
+            hashed_new_password = hash_password(new_password)
+            cursor.execute("UPDATE users SET password = %s WHERE username = %s", (hashed_new_password, username))
+            conn.commit()
+            return True, "✅ Password changed successfully."
+
     except MySQLError as e:
-        return False, f"Database error: {e}"
+        conn.rollback() # Rollback on error
+        print(f"DB Error in change_password: {e}") # Log detailed error
+        return False, f"❌ Database error changing password." # Generic error to user
+    except Exception as e:
+        conn.rollback() # Rollback on unexpected error
+        print(f"Unexpected Error in change_password: {e}") # Log detailed error
+        return False, "❌ An unexpected error occurred." # Generic error to user
+
 
 def delete_user(conn, username):
     """Delete a user from the system"""
@@ -307,32 +771,55 @@ def update_doctor_user(conn, doctor_id, username):
         conn.rollback()
         return False, f"❌ Database error: {e}"
 
-def assign_doctor_user(conn, doctor_id, username):
+def assign_doctor_user(conn, doctor_id, username, password=None):
     """Tạo user mới, băm mật khẩu và gán cho bác sĩ"""
     try:
         with conn.cursor() as cursor:
+            # Check if doctor exists
+            cursor.execute("SELECT DoctorID FROM Doctors WHERE DoctorID = %s", (doctor_id,))
+            if not cursor.fetchone():
+                 return False, "❌ Doctor ID not found."
+
             # Kiểm tra xem username đã tồn tại chưa
             cursor.execute("SELECT username FROM Users WHERE username = %s", (username,))
             if cursor.fetchone():
                 return False, "❌ Username already exists."
 
-            # Tạo mật khẩu ngẫu nhiên
-            raw_password = generate_temp_password()
-            hashed_password = bcrypt.hashpw(raw_password.encode('utf-8'), bcrypt.gensalt())
+            # Validate username and password (if provided)
+            valid_user, user_msg = is_valid_username(username)
+            if not valid_user:
+                 return False, user_msg
+
+            if password:
+                 strong_pass, pass_msg = is_strong_password(password)
+                 if not strong_pass:
+                     return False, pass_msg
+                 raw_password_to_hash = password
+                 password_info = f"Password set as provided."
+            else:
+                 raw_password_to_hash = generate_temp_password() # Generate if not provided
+                 password_info = f"Temporary Password: {raw_password_to_hash}" # Include temp pass in message
+
+            hashed_password = hash_password(raw_password_to_hash)
 
             # Tạo user mới với role 'doctor'
             cursor.execute(
-                "INSERT INTO Users (username, password, role) VALUES (%s, %s, 'doctor')",
+                "INSERT INTO Users (username, password, role, IsActive) VALUES (%s, %s, 'doctor', TRUE)",
                 (username, hashed_password)
             )
 
             # Gán user cho bác sĩ
             cursor.execute("UPDATE Doctors SET DoctorUser = %s WHERE doctorID = %s", (username, doctor_id))
             conn.commit()
-            return True, f"✅ User created and assigned to doctor.\n🔐 Password: {raw_password}"
+            return True, f"✅ User '{username}' created and assigned.\n{password_info}"
     except MySQLError as e:
         conn.rollback()
-        return False, f"❌ Failed: {e}"
+        print(f"DB error in assign_doctor_user: {e}") # Log details
+        return False, f"❌ Database error: Failed to assign user." # Generic error to user
+    except Exception as e:
+        conn.rollback()
+        print(f"Unexpected error in assign_doctor_user: {e}") # Log details
+        return False, f"❌ Unexpected error assigning user." # Generic error to user
 
 def update_doctor_info(conn, doctor_id, name=None, speciality=None, dept_id=None, phone=None, email=None):
     try:
@@ -421,6 +908,72 @@ def disable_doctor(conn, doctorID):
         return False, f"❌ Failed to disable doctor: {e}"
 
 # Patient Management
+def view_patients(conn):
+    """Retrieve all active patients from the system."""
+    try:
+        with conn.cursor() as cursor:
+            # Select relevant patient details, filtering out disabled ones
+            cursor.execute("""
+                SELECT PatientID, PatientName, DateOfBirth, Gender, Address, PhoneNumber
+                FROM Patients
+                WHERE Status = 'active'
+                ORDER BY PatientName
+            """)
+            patients = cursor.fetchall()
+            if patients:
+                return True, patients # Return the list of patient dictionaries
+            else:
+                return True, [] # Return an empty list if no active patients
+    except MySQLError as e:
+        print(f"❌ Database error in view_patients: {e}")
+        return False, f"❌ Failed to retrieve patients: Database error."
+    except Exception as e:
+        print(f"❌ Unexpected error in view_patients: {e}")
+        return False, "❌ An unexpected error occurred while fetching patients."
+
+
+def view_appointments(conn, doctor_id=None):
+    """
+    Retrieve appointments.
+    If doctor_id is provided, retrieve appointments only for that doctor.
+    Otherwise, retrieve all appointments.
+    """
+    try:
+        with conn.cursor() as cursor:
+            if doctor_id:
+                # View appointments for a specific doctor
+                query = """
+                    SELECT a.AppointmentID, p.PatientName, a.AppointmentDate, a.AppointmentTime, a.Status
+                    FROM Appointments a
+                    JOIN Patients p ON a.PatientID = p.PatientID
+                    WHERE a.DoctorID = %s
+                    ORDER BY a.AppointmentDate DESC, a.AppointmentTime DESC
+                """
+                cursor.execute(query, (doctor_id,))
+                title = f"Appointments for Doctor ID {doctor_id}"
+            else:
+                # View all appointments (typically for admin/receptionist)
+                query = """
+                    SELECT a.AppointmentID, p.PatientName, d.DoctorName,
+                           a.AppointmentDate, a.AppointmentTime, a.Status
+                    FROM Appointments a
+                    JOIN Patients p ON a.PatientID = p.PatientID
+                    JOIN Doctors d ON a.DoctorID = d.DoctorID
+                    ORDER BY a.AppointmentDate DESC, a.AppointmentTime DESC
+                """
+                cursor.execute(query)
+                title = "All Appointments"
+
+            appointments = cursor.fetchall()
+            # Return the title along with the data for context
+            return True, {"title": title, "data": appointments}
+    except MySQLError as e:
+        print(f"❌ Database error in view_appointments: {e}")
+        return False, f"❌ Failed to retrieve appointments: Database error."
+    except Exception as e:
+        print(f"❌ Unexpected error in view_appointments: {e}")
+        return False, "❌ An unexpected error occurred while fetching appointments."
+    
 def add_patient(conn, name, date_of_birth, gender, address, phone_number):
     """Add new patient to the system"""
     print("\n--- Add New Patient ---")
@@ -699,6 +1252,74 @@ def update_appointment_status(conn, appointment_id, new_status):
         return False, f"Failed to update appointment status: {e}"
 
 # Room Management
+def get_all_available_rooms(conn):
+    """
+    Lấy danh sách tất cả các phòng trống trong bệnh viện (không phân biệt khoa)
+    
+    Args:
+        conn: Kết nối database
+        
+    Returns:
+        Tuple (success, data/error_message):
+        - success: True nếu thành công, False nếu có lỗi
+        - data: Danh sách phòng trống nếu thành công, error message nếu thất bại
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT r.RoomID, r.RoomNumber, rt.TypeName, d.DepartmentName, rt.BaseCost
+                FROM Rooms r
+                JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                WHERE r.Status = 'Available'
+                ORDER BY d.DepartmentName, r.RoomNumber
+            """)
+            rooms = cursor.fetchall()
+            return True, rooms
+    except Exception as e:
+        print(f"Error getting all available rooms: {str(e)}")
+        return False, str(e)
+
+def get_all_rooms_with_status(conn):
+    """
+    Lấy danh sách tất cả phòng với trạng thái chi tiết
+    
+    Returns:
+        Tuple (success, data/error):
+        - success: True/False
+        - data: List of rooms or error message
+    """
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    r.RoomID, 
+                    r.RoomNumber, 
+                    rt.TypeName,
+                    d.DepartmentName,
+                    r.Status,
+                    rt.BaseCost,
+                    p.PatientName,
+                    r.LastCleanedDate
+                FROM Rooms r
+                JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                LEFT JOIN Patients p ON r.CurrentPatientID = p.PatientID
+                ORDER BY 
+                    CASE r.Status
+                        WHEN 'Available' THEN 1
+                        WHEN 'Cleaning' THEN 2
+                        WHEN 'Occupied' THEN 3
+                        WHEN 'Maintenance' THEN 4
+                        ELSE 5
+                    END,
+                    d.DepartmentName,
+                    r.RoomNumber
+            """)
+            return True, cursor.fetchall()
+    except Exception as e:
+        print(f"Error getting rooms with status: {str(e)}")
+        return False, str(e)   
 def add_room(conn, room_number, room_type_id, department_id, status="Available"):
     """Add a new room to the system"""
     try:
@@ -987,6 +1608,7 @@ def search_patient_room(conn, patient_id=None, patient_name=None):
         return False, f"❌ Error fetching patient room: {e}"
 
 # Service Management
+
 def add_service(conn, service_name, service_code, service_cost, des):
     """Add a new service to the system"""
     try:
@@ -1131,22 +1753,32 @@ def attach_service_to_invoice(conn, invoice_id, patient_service_id):
             if not cursor.fetchone():
                 return False, "❌ Invoice not found."
 
-            # Kiểm tra xem dịch vụ có tồn tại không
-            cursor.execute("SELECT PatientServiceID FROM PatientServices WHERE PatientServiceID = %s", (patient_service_id,))
-            if not cursor.fetchone():
-                return False, "❌ Patient service not found."
+            # Kiểm tra xem dịch vụ của bệnh nhân có tồn tại không
+            cursor.execute("SELECT PatientServiceID, InvoiceID FROM PatientServices WHERE PatientServiceID = %s", (patient_service_id,))
+            service = cursor.fetchone()
+            if not service:
+                return False, "❌ Patient service record not found."
+            if service['InvoiceID'] is not None:
+                 return False, f"❌ Service already attached to Invoice ID: {service['InvoiceID']}."
 
-            # Gán dịch vụ vào hóa đơn
+
+            # Update PatientServices to link to the invoice
             cursor.execute("""
-                INSERT INTO InvoiceServices (InvoiceID, PatientServiceID)
-                VALUES (%s, %s)
+                UPDATE PatientServices
+                SET InvoiceID = %s
+                WHERE PatientServiceID = %s
             """, (invoice_id, patient_service_id))
 
             conn.commit()
             return True, "✅ Service attached to invoice successfully."
     except MySQLError as e:
         conn.rollback()
+        print(f"DB error in attach_service_to_invoice: {e}")
         return False, f"❌ Failed to attach service to invoice: {e}"
+    except Exception as e:
+         conn.rollback()
+         print(f"Unexpected error in attach_service_to_invoice: {e}")
+         return False, f"❌ Unexpected error attaching service."
 
 # Prescription Management
 def create_prescription(conn, patient_id, doctor_id, prescription_date):
@@ -1165,7 +1797,7 @@ def create_prescription(conn, patient_id, doctor_id, prescription_date):
 
             # Tạo đơn thuốc mới
             cursor.execute("""
-                INSERT INTO Prescriptions (PatientID, DoctorID, PrescriptionDate)
+                INSERT INTO Prescription (PatientID, DoctorID, PrescriptionDate)
                 VALUES (%s, %s, %s)
             """, (patient_id, doctor_id, prescription_date))
 
@@ -1176,15 +1808,35 @@ def create_prescription(conn, patient_id, doctor_id, prescription_date):
         return False, f"❌ Failed to create prescription: {e}"
      
 def delete_prescription_detail(conn, prescription_detail_id):
-    """Delete a medicine from a prescription"""
+    """Delete a specific medicine entry from a prescription using its detail ID."""
+    if not prescription_detail_id:
+        return False, "❌ Prescription Detail ID is required."
     try:
         with conn.cursor() as cursor:
+            # Check if the detail exists before deleting
+            cursor.execute("SELECT PrescriptionDetailID FROM PrescriptionDetails WHERE PrescriptionDetailID = %s", (prescription_detail_id,))
+            if not cursor.fetchone():
+                 return False, f"❌ Prescription Detail ID {prescription_detail_id} not found."
+
+            # Proceed with deletion
             cursor.execute("DELETE FROM PrescriptionDetails WHERE PrescriptionDetailID = %s", (prescription_detail_id,))
+            affected_rows = cursor.rowcount # Check if a row was actually deleted
             conn.commit()
-            return True, "✅ Prescription detail deleted successfully."
+
+            if affected_rows > 0:
+                return True, f"✅ Prescription detail ID {prescription_detail_id} deleted successfully."
+            else:
+                 # This case should ideally not happen due to the check above, but included for robustness
+                 return False, f"❌ Prescription Detail ID {prescription_detail_id} found but could not be deleted."
+
     except MySQLError as e:
         conn.rollback()
-        return False, f"❌ Failed to delete prescription detail: {e}"
+        print(f"DB error in delete_prescription_detail: {e}")
+        return False, f"❌ Failed to delete prescription detail: Database error."
+    except Exception as e:
+        conn.rollback()
+        print(f"Unexpected error in delete_prescription_detail: {e}")
+        return False, "❌ Failed to delete prescription detail: Unexpected error."
 
 def delete_prescription(conn, prescription_id):
     """Delete a prescription"""
@@ -1203,7 +1855,7 @@ def list_prescriptions(conn, patient_id):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT p.PrescriptionID, p.PrescriptionDate, d.DoctorName
-                FROM Prescriptions p
+                FROM Prescription p
                 JOIN Doctors d ON p.DoctorID = d.DoctorID
                 WHERE p.PatientID = %s
                 ORDER BY p.PrescriptionDate DESC
@@ -1595,14 +2247,21 @@ def adjust_inventory(conn, inventoryID, quantity):
     try:
         with conn.cursor() as cursor:
             # Kiểm tra xem mặt hàng tồn kho có tồn tại không
-            cursor.execute("SELECT InventoryID FROM Inventory WHERE InventoryID = %s", (inventoryID,))
-            if not cursor.fetchone():
+            cursor.execute("SELECT Quantity FROM Inventory WHERE InventoryID = %s", (inventoryID,))
+            item = cursor.fetchone()
+            if not item:
                 return False, "❌ Inventory item not found."
+
+            # Check if adjustment leads to negative stock if quantity is negative
+            current_quantity = item['Quantity']
+            if current_quantity + quantity < 0:
+                 return False, f"❌ Adjustment leads to negative stock (Current: {current_quantity}, Adjust: {quantity})."
+
 
             # Cập nhật số lượng mặt hàng tồn kho
             cursor.execute("""
-                UPDATE Inventory 
-                SET Quantity = Quantity + %s 
+                UPDATE Inventory
+                SET Quantity = Quantity + %s
                 WHERE InventoryID = %s
             """, (quantity, inventoryID))
 
@@ -1610,9 +2269,8 @@ def adjust_inventory(conn, inventoryID, quantity):
             return True, "✅ Inventory item quantity adjusted successfully."
     except MySQLError as e:
         conn.rollback()
+        print(f"DB error in adjust_inventory: {e}")
         return False, f"❌ Failed to adjust inventory item quantity: {e}"
-    finally:
-        conn.close()
 
 # insurance management
 def add_insurance_record(conn, patientID, InsuranceProvider, PolicyNumber,
@@ -1922,21 +2580,21 @@ def create_invoice(conn, patient_id, total_amount):
 def view_invoices(conn, patient_id=None):
     """View invoices (all or for specific patient)"""
     try:
-        with conn.cursor() as cursor:  # Không dùng dictionary=True
+        with conn.cursor() as cursor:  
             if patient_id:
                 cursor.execute("""
-                    SELECT InvoiceID, PatientID, InvoiceDate, TotalAmount
+                    SELECT InvoiceID, PatientID, InvoiceDate, TotalAmount,PaymentStatus
                     FROM Invoices WHERE PatientID = %s
                     ORDER BY InvoiceDate DESC
                 """, (patient_id,))
             else:
                 cursor.execute("""
-                    SELECT InvoiceID, PatientID, InvoiceDate, TotalAmount
+                    SELECT InvoiceID, PatientID, InvoiceDate, TotalAmount,PaymentStatus
                     FROM Invoices
                     ORDER BY InvoiceDate DESC
                 """)
             
-            invoices = cursor.fetchall()  # Lấy tất cả dữ liệu về
+            invoices = cursor.fetchall()  
             return True, invoices
     except MySQLError as e:
         return False, f"Database error: {e}"
@@ -2215,32 +2873,565 @@ def generate_prescription_pdf(conn, prescription_id, output_path):
             
     except Exception as e:
         return False, f"Error generating PDF: {e}"
-
-# Statistical Reporting Functions
-def generate_statistics_report(conn, start_date=None, end_date=None):
-    """Generate statistics report based on registration date."""
+def get_financial_report_data(conn, start_date=None, end_date=None):
+    """
+    Get comprehensive financial report data including:
+    - Total revenue by service type
+    - Outstanding payments
+    - Insurance claims
+    - Daily/weekly/monthly trends
+    
+    Args:
+        conn: Database connection
+        start_date (str): YYYY-MM-DD format (optional)
+        end_date (str): YYYY-MM-DD format (optional)
+    
+    Returns:
+        tuple: (success: bool, data: dict/str)
+    """
     try:
         with conn.cursor() as cursor:
+            # Base query with optional date filtering
+            date_condition = ""
+            params = []
             if start_date and end_date:
-                cursor.execute("""
-                    SELECT COUNT(*) as TotalPatients, 
-                           DATE_FORMAT(RegistrationDate, '%Y-%m') as MonthYear
-                    FROM Patients
-                    WHERE RegistrationDate BETWEEN %s AND %s
-                    GROUP BY MonthYear
-                    ORDER BY MonthYear
-                """, (start_date, end_date))
-            else:
-                cursor.execute("""
-                    SELECT COUNT(*) as TotalPatients, 
-                           DATE_FORMAT(RegistrationDate, '%Y-%m') as MonthYear
-                    FROM Patients
-                    GROUP BY MonthYear
-                    ORDER BY MonthYear
-                """)
-            return True, ("STATISTICS REPORT", cursor.fetchall())
+                date_condition = "WHERE i.InvoiceDate BETWEEN %s AND %s"
+                params.extend([start_date, end_date])
+            elif start_date:
+                date_condition = "WHERE i.InvoiceDate >= %s"
+                params.append(start_date)
+            elif end_date:
+                date_condition = "WHERE i.InvoiceDate <= %s"
+                params.append(end_date)
+            
+            # 1. Overall financial summary
+            cursor.execute(f"""
+                SELECT 
+                    SUM(i.TotalAmount) as total_revenue,
+                    SUM(CASE WHEN i.PaymentStatus = 'Paid' THEN i.TotalAmount ELSE 0 END) as paid_amount,
+                    SUM(CASE WHEN i.PaymentStatus = 'Pending' THEN i.TotalAmount ELSE 0 END) as pending_amount,
+                    COUNT(DISTINCT i.InvoiceID) as invoice_count,
+                    AVG(i.TotalAmount) as avg_invoice
+                FROM Invoices i
+                {date_condition}
+            """, params)
+            summary = cursor.fetchone()
+            
+            # 2. Revenue by service type
+            cursor.execute(f"""
+                SELECT 
+                    s.ServiceName,
+                    COUNT(ps.ServiceID) as service_count,
+                    SUM(ps.CostAtTime * ps.Quantity) as total_revenue
+                FROM PatientServices ps
+                JOIN Services s ON ps.ServiceID = s.ServiceID
+                JOIN Invoices i ON ps.InvoiceID = i.InvoiceID
+                {date_condition}
+                GROUP BY s.ServiceName
+                ORDER BY total_revenue DESC
+            """, params)
+            service_revenue = cursor.fetchall()
+            
+            # 3. Insurance claims summary (nếu bảng InsuranceClaims tồn tại)
+            insurance_data = None
+            try:
+                cursor.execute(f"""
+                    SELECT 
+                        COUNT(DISTINCT i.InsuranceID) as insurance_count,
+                        SUM(i.CoveredAmount) as total_covered,
+                        SUM(i.PatientResponsibility) as total_patient_responsibility
+                    FROM InsuranceClaims i
+                    JOIN Invoices inv ON i.InvoiceID = inv.InvoiceID
+                    {date_condition}
+                """, params)
+                insurance_data = cursor.fetchone()
+            except:
+                insurance_data = {
+                    'insurance_count': 0,
+                    'total_covered': 0,
+                    'total_patient_responsibility': 0
+                }
+            
+            # 4. Daily revenue trend
+            cursor.execute(f"""
+                SELECT 
+                    DATE(i.InvoiceDate) as day,
+                    SUM(i.TotalAmount) as daily_revenue
+                FROM Invoices i
+                {date_condition}
+                GROUP BY DATE(i.InvoiceDate)
+                ORDER BY day
+            """, params)
+            daily_trend = cursor.fetchall()
+            
+            return True, {
+                'summary': summary,
+                'service_revenue': service_revenue,
+                'insurance_data': insurance_data,
+                'daily_trend': daily_trend,
+                'date_range': {
+                    'start': start_date or 'Earliest',
+                    'end': end_date or 'Latest'
+                }
+            }
+            
     except Exception as e:
-        return False, f"Failed to generate report: {e}"
+        return False, f"Database error: {str(e)}"
+
+
+def get_room_utilization_stats(conn):
+    """
+    Get detailed room utilization statistics including:
+    - Occupancy rates by department
+    - Average stay duration
+    - Revenue by room type
+    
+    Returns:
+        tuple: (success: bool, data: dict/str)
+    """
+    try:
+        with conn.cursor() as cursor:
+            # 1. Overall room statistics
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_rooms,
+                    SUM(CASE WHEN Status = 'Occupied' THEN 1 ELSE 0 END) as occupied_rooms,
+                    SUM(CASE WHEN Status = 'Available' THEN 1 ELSE 0 END) as available_rooms,
+                    SUM(CASE WHEN Status = 'Maintenance' THEN 1 ELSE 0 END) as maintenance_rooms
+                FROM Rooms
+            """)
+            room_stats = cursor.fetchone()
+            
+            # 2. Occupancy by department
+            cursor.execute("""
+                SELECT 
+                    d.DepartmentName,
+                    COUNT(r.RoomID) as total_rooms,
+                    SUM(CASE WHEN r.Status = 'Occupied' THEN 1 ELSE 0 END) as occupied,
+                    ROUND(SUM(CASE WHEN r.Status = 'Occupied' THEN 1 ELSE 0 END) / COUNT(r.RoomID) * 100, 1) as occupancy_rate
+                FROM Rooms r
+                JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                GROUP BY d.DepartmentName
+                ORDER BY occupancy_rate DESC
+            """)
+            dept_stats = cursor.fetchall()
+            
+            # 3. Revenue by room type
+            cursor.execute("""
+    SELECT 
+        rt.TypeName,
+        COUNT(r.RoomID)        AS room_count,
+        rt.BaseCost * COUNT(r.RoomID) AS total_revenue
+    FROM RoomTypes rt
+    JOIN Rooms r
+      ON rt.RoomTypeID = r.RoomTypeID
+    GROUP BY rt.TypeName, rt.BaseCost
+    ORDER BY total_revenue DESC
+""")
+            revenue_stats = cursor.fetchall()
+            
+            # 4. Average length of stay
+            cursor.execute("""
+                SELECT 
+                    AVG(DATEDIFF(COALESCE(ProcessedDate, CURDATE()), OrderDate)) as avg_stay_days
+                FROM Admissionorders
+                WHERE OrderDate > DATE_SUB(CURDATE(), INTERVAL 3 MONTH)
+            """)
+            stay_stats = cursor.fetchone()
+            
+            return True, {
+                'overall': room_stats,
+                'by_department': dept_stats,
+                'revenue_by_type': revenue_stats,
+                'stay_stats': stay_stats
+            }
+            
+    except Exception as e:
+        return False, f"Database error: {str(e)}"
+
+
+def get_hospital_statistics(conn):
+    """
+    Get comprehensive hospital statistics including:
+    - Patient demographics
+    - Doctor productivity
+    - Service utilization
+    - Appointment metrics
+    
+    Returns:
+        tuple: (success: bool, data: dict/str)
+    """
+    try:
+        with conn.cursor() as cursor:
+            # 1. Patient demographics
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total_patients,
+                    SUM(CASE WHEN Gender = 'M' THEN 1 ELSE 0 END) as male_patients,
+                    SUM(CASE WHEN Gender = 'F' THEN 1 ELSE 0 END) as female_patients,
+                    SUM(CASE WHEN Gender = 'O' THEN 1 ELSE 0 END) as other_patients,
+                    AVG(YEAR(CURDATE()) - YEAR(DateOfBirth)) as avg_age
+                FROM Patients
+                WHERE Status = 'Active'
+            """)
+            patient_stats = cursor.fetchone()
+            
+            # 2. Doctor productivity
+            cursor.execute("""
+    SELECT 
+        d.DoctorName,
+        COUNT(DISTINCT a.AppointmentID)       AS appointment_count,
+        COUNT(DISTINCT p.PrescriptionID)      AS prescription_count,
+        COUNT(DISTINCT ad.AdmissionOrderID)   AS admission_count
+    FROM Doctors d
+    LEFT JOIN Appointments a 
+      ON d.DoctorID = a.DoctorID
+         AND a.AppointmentDate BETWEEN DATE_SUB(CURDATE(), INTERVAL 1 MONTH) AND CURDATE()
+    LEFT JOIN Prescription p 
+      ON d.DoctorID = p.DoctorID
+         AND p.PrescriptionDate BETWEEN DATE_SUB(CURDATE(), INTERVAL 1 MONTH) AND CURDATE()
+    LEFT JOIN AdmissionOrders ad 
+      ON d.DoctorID = ad.DoctorID
+         AND ad.OrderDate BETWEEN DATE_SUB(CURDATE(), INTERVAL 1 MONTH) AND CURDATE()
+    GROUP BY d.DoctorName
+    ORDER BY appointment_count DESC
+    LIMIT 10
+""")
+            doctor_stats = cursor.fetchall()
+            
+            # 3. Service utilization
+            cursor.execute("""
+                SELECT 
+    s.ServiceName,
+    COUNT(ps.ServiceID)                   AS service_count,
+    SUM(ps.CostAtTime * ps.Quantity)      AS total_revenue
+FROM Services s
+LEFT JOIN PatientServices ps 
+  ON s.ServiceID = ps.ServiceID
+WHERE ps.ServiceDate 
+      BETWEEN DATE_SUB(CURDATE(), INTERVAL 1 MONTH) 
+          AND CURDATE()
+GROUP BY s.ServiceName
+ORDER BY service_count DESC
+LIMIT 10; """)
+            service_stats = cursor.fetchall()
+            
+            # 4. Appointment metrics
+            cursor.execute("""
+                SELECT 
+  COUNT(*) AS total_appointments,
+  SUM(CASE WHEN Status = 'Completed' THEN 1 ELSE 0 END) AS completed,
+  SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END) AS cancelled,
+  SUM(CASE WHEN Status = 'Scheduled' THEN 1 ELSE 0 END) AS scheduled,
+  AVG(
+    TIMESTAMPDIFF(
+      MINUTE,
+      CONCAT(AppointmentDate, ' ', AppointmentTime),
+      NOW()
+    )
+  ) AS avg_duration_minutes
+FROM Appointments
+WHERE AppointmentDate 
+      BETWEEN DATE_SUB(CURDATE(), INTERVAL 1 MONTH) AND CURDATE(); """)
+            appointment_stats = cursor.fetchone()
+            
+            return True, {
+                'patient_demographics': patient_stats,
+                'doctor_productivity': doctor_stats,
+                'service_utilization': service_stats,
+                'appointment_metrics': appointment_stats
+            }
+            
+    except Exception as e:
+        return False, f"Database error: {str(e)}"
+
+def get_departments_list(conn):
+    """Get list of all departments for dropdowns"""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT DepartmentID, DepartmentName 
+                FROM Departments 
+                ORDER BY DepartmentName
+            """)
+            return True, cursor.fetchall()
+    except Exception as e:
+        return False, f"Database error: {str(e)}"
+
+
+def get_all_rooms_with_status(conn):
+    """Get complete room list with status information"""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT 
+                    r.RoomID, 
+                    r.RoomNumber, 
+                    rt.TypeName,
+                    d.DepartmentName,
+                    r.Status,
+                    rt.BaseCost
+                FROM Rooms r
+                JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                ORDER BY d.DepartmentName, r.RoomNumber
+            """)
+            return True, cursor.fetchall()
+    except Exception as e:
+        return False, f"Database error: {str(e)}"
+def generate_financial_report(conn, start_date=None, end_date=None):
+    """
+    Generate a more detailed financial report including revenue breakdown.
+
+    Args:
+        conn: Database connection object.
+        start_date (str, optional): Start date 'YYYY-MM-DD'. Defaults to None (no start limit).
+        end_date (str, optional): End date 'YYYY-MM-DD'. Defaults to None (no end limit).
+
+    Returns:
+        tuple: (bool, dict/str):
+               - True and a dictionary containing report data if successful.
+                 Keys: 'title', 'period', 'total_revenue', 'room_revenue',
+                       'medicine_revenue', 'service_revenue', 'monthly_summary' (optional)
+               - False and an error message string if failed.
+    """
+    report_data = {
+        'title': "Financial Summary Report",
+        'period': "All Time",
+        'total_revenue': 0.0,
+        'room_revenue': 0.0,
+        'medicine_revenue': 0.0,
+        'service_revenue': 0.0,
+        'monthly_summary': [] # Optional: For charting later
+    }
+    try:
+        with conn.cursor() as cursor:
+            # Base query to sum different cost types from *paid* invoices
+            # Assuming 'Paid' is the status for completed payments
+            query = """
+                SELECT
+                    SUM(RoomCost) as TotalRoomRevenue,
+                    SUM(MedicineCost) as TotalMedicineRevenue,
+                    SUM(ServiceCost) as TotalServiceRevenue,
+                    SUM(TotalAmount) as GrandTotalRevenue -- This is the final amount paid
+                FROM Invoices
+                WHERE PaymentStatus = 'Paid'
+            """
+            params = []
+            period_desc = []
+            if start_date:
+                query += " AND InvoiceDate >= %s"
+                params.append(start_date)
+                period_desc.append(f"From {start_date}")
+            if end_date:
+                query += " AND InvoiceDate <= %s"
+                params.append(end_date)
+                period_desc.append(f"To {end_date}")
+
+            if period_desc:
+                 report_data['period'] = " ".join(period_desc)
+
+            cursor.execute(query, tuple(params))
+            summary = cursor.fetchone()
+
+            if summary:
+                report_data['room_revenue'] = float(summary.get('TotalRoomRevenue', 0.0) or 0.0)
+                report_data['medicine_revenue'] = float(summary.get('TotalMedicineRevenue', 0.0) or 0.0)
+                report_data['service_revenue'] = float(summary.get('TotalServiceRevenue', 0.0) or 0.0)
+                report_data['total_revenue'] = float(summary.get('GrandTotalRevenue', 0.0) or 0.0)
+                # Note: GrandTotalRevenue might differ from sum of components if discounts exist but aren't stored separately
+
+            # --- Optional: Add Monthly Summary for charting ---
+            query_monthly = """
+                 SELECT
+                     DATE_FORMAT(InvoiceDate, '%Y-%m') as MonthYear,
+                     SUM(TotalAmount) as MonthlyTotal
+                 FROM Invoices
+                 WHERE PaymentStatus = 'Paid'
+            """
+            params_monthly = []
+            if start_date:
+                 query_monthly += " AND InvoiceDate >= %s"
+                 params_monthly.append(start_date)
+            if end_date:
+                 query_monthly += " AND InvoiceDate <= %s"
+                 params_monthly.append(end_date)
+
+            query_monthly += " GROUP BY MonthYear ORDER BY MonthYear ASC"
+            cursor.execute(query_monthly, tuple(params_monthly))
+            report_data['monthly_summary'] = cursor.fetchall()
+            # --- End Optional Monthly Summary ---
+
+            return True, report_data
+
+    except MySQLError as e:
+        print(f"DB Error generating financial report: {e}")
+        return False, f"Database error generating financial report: {e}"
+    except Exception as e:
+        print(f"Unexpected error generating financial report: {e}")
+        return False, f"An unexpected error occurred: {e}"
+
+# --- New Room Report ---
+def generate_room_report(conn, report_type='status'):
+    """
+    Generates reports related to rooms.
+
+    Args:
+        conn: Database connection object.
+        report_type (str): 'status' for current occupancy/status counts,
+                           'revenue' for total invoiced room revenue (simplified).
+
+    Returns:
+        tuple: (bool, dict/str):
+               - True and dictionary with report data/title.
+               - False and error message.
+    """
+    try:
+        with conn.cursor() as cursor:
+            if report_type == 'status':
+                # Get current room status counts by type and department
+                cursor.execute("""
+                    SELECT
+                        d.DepartmentName,
+                        rt.TypeName,
+                        r.Status,
+                        COUNT(r.RoomID) as Count
+                    FROM Rooms r
+                    JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                    JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                    GROUP BY d.DepartmentName, rt.TypeName, r.Status
+                    ORDER BY d.DepartmentName, rt.TypeName, r.Status;
+                """)
+                status_data = cursor.fetchall()
+                return True, {'title': "Current Room Status Report", 'data': status_data, 'type': 'status'}
+
+            elif report_type == 'revenue':
+                 # Get total invoiced room revenue (based on Invoices table)
+                 # Note: This assumes RoomCost in Invoices reflects actual billed amount.
+                 cursor.execute("""
+                    SELECT
+                        DATE_FORMAT(InvoiceDate, '%Y-%m') as MonthYear,
+                        SUM(RoomCost) as TotalRoomRevenue
+                    FROM Invoices
+                    WHERE RoomCost > 0 AND PaymentStatus = 'Paid' -- Only count paid invoices with room cost
+                    GROUP BY MonthYear
+                    ORDER BY MonthYear ASC;
+                 """)
+                 revenue_data = cursor.fetchall()
+                 return True, {'title': "Monthly Invoiced Room Revenue", 'data': revenue_data, 'type': 'revenue'}
+            else:
+                return False, "Invalid room report type specified."
+
+    except MySQLError as e:
+        print(f"DB Error generating room report: {e}")
+        return False, f"Database error generating room report: {e}"
+    except Exception as e:
+        print(f"Unexpected error generating room report: {e}")
+        return False, f"An unexpected error occurred: {e}"
+
+
+# --- Enhanced Statistics Report ---
+def generate_statistics_report(conn, start_date=None, end_date=None):
+    """
+    Generate various operational statistics within a date range.
+
+    Args:
+        conn: Database connection object.
+        start_date (str, optional): Start date 'YYYY-MM-DD'. Defaults to None.
+        end_date (str, optional): End date 'YYYY-MM-DD'. Defaults to None.
+
+    Returns:
+        tuple: (bool, dict/str):
+               - True and a dictionary containing different stats.
+               - False and an error message.
+    """
+    stats = {
+        'title': "Hospital Statistics Report",
+        'period': "All Time",
+        'patient_registrations': [],
+        'appointment_summary': {},
+        'top_services': [],
+        'patient_demographics': {}
+    }
+    period_desc = []
+    if start_date: period_desc.append(f"From {start_date}")
+    if end_date: period_desc.append(f"To {end_date}")
+    if period_desc: stats['period'] = " ".join(period_desc)
+
+    try:
+        with conn.cursor() as cursor:
+
+            # 1. Patient Registrations (Example: Using created_at if Patients table lacks RegistrationDate)
+            # Modify table/column names if your schema differs
+            query_patients = """
+                SELECT COUNT(*) as TotalPatients, DATE_FORMAT(created_at, '%Y-%m') as MonthYear
+                FROM Patients -- Or 'users' if registration is tied to user creation
+                WHERE 1=1
+            """
+            params_patients = []
+            if start_date:
+                query_patients += " AND DATE(created_at) >= %s"
+                params_patients.append(start_date)
+            if end_date:
+                query_patients += " AND DATE(created_at) <= %s"
+                params_patients.append(end_date)
+            query_patients += " GROUP BY MonthYear ORDER BY MonthYear ASC"
+            cursor.execute(query_patients, tuple(params_patients))
+            stats['patient_registrations'] = cursor.fetchall()
+
+            # 2. Appointment Status Summary
+            query_appts = """
+                SELECT Status, COUNT(*) as Count
+                FROM Appointments
+                WHERE 1=1
+            """
+            params_appts = []
+            if start_date:
+                query_appts += " AND AppointmentDate >= %s"
+                params_appts.append(start_date)
+            if end_date:
+                query_appts += " AND AppointmentDate <= %s"
+                params_appts.append(end_date)
+            query_appts += " GROUP BY Status ORDER BY Status"
+            cursor.execute(query_appts, tuple(params_appts))
+            stats['appointment_summary'] = {row['Status']: row['Count'] for row in cursor.fetchall()}
+
+            # 3. Top Services Used (Based on PatientServices)
+            query_services = """
+                SELECT s.ServiceName, COUNT(ps.PatientServiceID) as UsageCount
+                FROM PatientServices ps
+                JOIN Services s ON ps.ServiceID = s.ServiceID
+                WHERE 1=1
+            """
+            params_services = []
+            if start_date:
+                query_services += " AND DATE(ps.ServiceDate) >= %s"
+                params_services.append(start_date)
+            if end_date:
+                query_services += " AND DATE(ps.ServiceDate) <= %s"
+                params_services.append(end_date)
+            query_services += " GROUP BY s.ServiceName ORDER BY UsageCount DESC LIMIT 10" # Top 10
+            cursor.execute(query_services, tuple(params_services))
+            stats['top_services'] = cursor.fetchall()
+
+            # 4. Patient Demographics (Example: Gender Distribution)
+            query_demo = """
+                 SELECT Gender, COUNT(*) as Count
+                 FROM Patients
+                 WHERE Status = 'active' -- Count only active patients
+                 GROUP BY Gender;
+            """
+            cursor.execute(query_demo)
+            stats['patient_demographics'] = {row['Gender']: row['Count'] for row in cursor.fetchall()}
+
+            return True, stats
+
+    except MySQLError as e:
+        print(f"DB Error generating statistics report: {e}")
+        return False, f"Database error generating statistics report: {e}"
+    except Exception as e:
+        print(f"Unexpected error generating statistics report: {e}")
+        return False, f"An unexpected error occurred: {e}"
     
 def generate_patient_report(conn, start_date=None, end_date=None):
     """Generate patient report based on registration date."""
@@ -2370,58 +3561,183 @@ def get_medicine_report(conn, start_date=None, end_date=None):
         return False, f"Failed to generate report: {e}"
     
 def get_service_report(conn, start_date=None, end_date=None):
-    """Generate service report based on services used."""
+    """Generate service report based on services used (PatientServices)."""
     try:
         with conn.cursor() as cursor:
+            query = """
+                SELECT s.ServiceName, SUM(ps.Quantity) as TotalUsed, SUM(ps.CostAtTime) as TotalRevenue
+                FROM PatientServices ps
+                JOIN Services s ON ps.ServiceID = s.ServiceID
+                WHERE 1=1
+            """
+            params = []
             if start_date and end_date:
-                cursor.execute("""
-                    SELECT s.ServiceName, SUM(s.ServiceCost) as TotalCost
-                    FROM ServicesUsed s
-                    JOIN Appointments a ON s.AppointmentID = a.AppointmentID
-                    WHERE a.AppointmentDate BETWEEN %s AND %s
-                    GROUP BY s.ServiceName
-                    ORDER BY TotalCost DESC
-                """, (start_date, end_date))
-            else:
-                cursor.execute("""
-                    SELECT s.ServiceName, SUM(s.ServiceCost) as TotalCost
-                    FROM ServicesUsed s
-                    JOIN Appointments a ON s.AppointmentID = a.AppointmentID
-                    GROUP BY s.ServiceName
-                    ORDER BY TotalCost DESC
-                """)
-            return True, ("SERVICE REPORT", cursor.fetchall())
+                query += " AND DATE(ps.ServiceDate) BETWEEN %s AND %s"
+                params.extend([start_date, end_date])
+
+            query += """
+                GROUP BY s.ServiceName
+                ORDER BY TotalRevenue DESC
+            """
+            cursor.execute(query, tuple(params))
+            results = cursor.fetchall()
+            return True, ("SERVICE USAGE REPORT", results) # Return tuple (Title, Data)
+    except MySQLError as e:
+        print(f"DB Error in get_service_report: {e}")
+        return False, f"❌ Failed to generate service report: {e}" # Return tuple (Status, Message)
     except Exception as e:
-        return False, f"Failed to generate report: {e}"
+        print(f"Unexpected error in get_service_report: {e}")
+        return False, f"❌ Unexpected error generating service report." # Return tuple (Status, Message)
     
 # Reporting Functions
-def generate_financial_report(conn, by='month', year=None):
-    """Generate financial report by month or year."""
+def generate_financial_report(conn, start_date=None, end_date=None):
+    """
+    Generate a more detailed financial report including revenue breakdown.
+
+    Args:
+        conn: Database connection object.
+        start_date (str, optional): Start date 'YYYY-MM-DD'. Defaults to None (no start limit).
+        end_date (str, optional): End date 'YYYY-MM-DD'. Defaults to None (no end limit).
+
+    Returns:
+        tuple: (bool, dict/str):
+               - True and a dictionary containing report data if successful.
+                 Keys: 'title', 'period', 'total_revenue', 'room_revenue',
+                       'medicine_revenue', 'service_revenue', 'monthly_summary' (optional)
+               - False and an error message string if failed.
+    """
+    report_data = {
+        'title': "Financial Summary Report",
+        'period': "All Time",
+        'total_revenue': 0.0,
+        'room_revenue': 0.0,
+        'medicine_revenue': 0.0,
+        'service_revenue': 0.0,
+        'monthly_summary': [] # Optional: For charting later
+    }
     try:
         with conn.cursor() as cursor:
-            if by == 'month' and year:
-                cursor.execute("""
-                    SELECT MONTH(InvoiceDate) as Month, 
-                           SUM(TotalAmount) as Total
-                    FROM Invoices
-                    WHERE YEAR(InvoiceDate) = %s
-                    GROUP BY MONTH(InvoiceDate)
-                    ORDER BY Month
-                """, (year,))
-                return True, ("MONTHLY FINANCIAL REPORT FOR " + str(year), cursor.fetchall())
-            elif by == 'year':
-                cursor.execute("""
-                    SELECT YEAR(InvoiceDate) as Year, 
-                           SUM(TotalAmount) as Total
-                    FROM Invoices
-                    GROUP BY YEAR(InvoiceDate)
-                    ORDER BY Year
-                """)
-                return True, ("YEARLY FINANCIAL REPORT", cursor.fetchall())
-            else:
-                return False, "Invalid report type or missing year"
+            # Base query to sum different cost types from *paid* invoices
+            # Assuming 'Paid' is the status for completed payments
+            query = """
+                SELECT
+                    SUM(RoomCost) as TotalRoomRevenue,
+                    SUM(MedicineCost) as TotalMedicineRevenue,
+                    SUM(ServiceCost) as TotalServiceRevenue,
+                    SUM(TotalAmount) as GrandTotalRevenue -- This is the final amount paid
+                FROM Invoices
+                WHERE PaymentStatus = 'Paid'
+            """
+            params = []
+            period_desc = []
+            if start_date:
+                query += " AND InvoiceDate >= %s"
+                params.append(start_date)
+                period_desc.append(f"From {start_date}")
+            if end_date:
+                query += " AND InvoiceDate <= %s"
+                params.append(end_date)
+                period_desc.append(f"To {end_date}")
+
+            if period_desc:
+                 report_data['period'] = " ".join(period_desc)
+
+            cursor.execute(query, tuple(params))
+            summary = cursor.fetchone()
+
+            if summary:
+                report_data['room_revenue'] = float(summary.get('TotalRoomRevenue', 0.0) or 0.0)
+                report_data['medicine_revenue'] = float(summary.get('TotalMedicineRevenue', 0.0) or 0.0)
+                report_data['service_revenue'] = float(summary.get('TotalServiceRevenue', 0.0) or 0.0)
+                report_data['total_revenue'] = float(summary.get('GrandTotalRevenue', 0.0) or 0.0)
+                # Note: GrandTotalRevenue might differ from sum of components if discounts exist but aren't stored separately
+
+            # --- Optional: Add Monthly Summary for charting ---
+            query_monthly = """
+                 SELECT
+                     DATE_FORMAT(InvoiceDate, '%Y-%m') as MonthYear,
+                     SUM(TotalAmount) as MonthlyTotal
+                 FROM Invoices
+                 WHERE PaymentStatus = 'Paid'
+            """
+            params_monthly = []
+            if start_date:
+                 query_monthly += " AND InvoiceDate >= %s"
+                 params_monthly.append(start_date)
+            if end_date:
+                 query_monthly += " AND InvoiceDate <= %s"
+                 params_monthly.append(end_date)
+
+            query_monthly += " GROUP BY MonthYear ORDER BY MonthYear ASC"
+            cursor.execute(query_monthly, tuple(params_monthly))
+            report_data['monthly_summary'] = cursor.fetchall()
+            # --- End Optional Monthly Summary ---
+
+            return True, report_data
+
+    except MySQLError as e:
+        print(f"DB Error generating financial report: {e}")
+        return False, f"Database error generating financial report: {e}"
     except Exception as e:
-        return False, f"Failed to generate report: {e}"
+        print(f"Unexpected error generating financial report: {e}")
+        return False, f"An unexpected error occurred: {e}"
+
+def generate_room_report(conn, report_type='status'):
+    """
+    Generates reports related to rooms.
+
+    Args:
+        conn: Database connection object.
+        report_type (str): 'status' for current occupancy/status counts,
+                           'revenue' for total invoiced room revenue (simplified).
+
+    Returns:
+        tuple: (bool, dict/str):
+               - True and dictionary with report data/title.
+               - False and error message.
+    """
+    try:
+        with conn.cursor() as cursor:
+            if report_type == 'status':
+                # Get current room status counts by type and department
+                cursor.execute("""
+                    SELECT
+                        d.DepartmentName,
+                        rt.TypeName,
+                        r.Status,
+                        COUNT(r.RoomID) as Count
+                    FROM Rooms r
+                    JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
+                    JOIN Departments d ON r.DepartmentID = d.DepartmentID
+                    GROUP BY d.DepartmentName, rt.TypeName, r.Status
+                    ORDER BY d.DepartmentName, rt.TypeName, r.Status;
+                """)
+                status_data = cursor.fetchall()
+                return True, {'title': "Current Room Status Report", 'data': status_data, 'type': 'status'}
+
+            elif report_type == 'revenue':
+                 # Get total invoiced room revenue (based on Invoices table)
+                 # Note: This assumes RoomCost in Invoices reflects actual billed amount.
+                 cursor.execute("""
+                    SELECT
+                        DATE_FORMAT(InvoiceDate, '%Y-%m') as MonthYear,
+                        SUM(RoomCost) as TotalRoomRevenue
+                    FROM Invoices
+                    WHERE RoomCost > 0 AND PaymentStatus = 'Paid' -- Only count paid invoices with room cost
+                    GROUP BY MonthYear
+                    ORDER BY MonthYear ASC;
+                 """)
+                 revenue_data = cursor.fetchall()
+                 return True, {'title': "Monthly Invoiced Room Revenue", 'data': revenue_data, 'type': 'revenue'}
+            else:
+                return False, "Invalid room report type specified."
+
+    except MySQLError as e:
+        print(f"DB Error generating room report: {e}")
+        return False, f"Database error generating room report: {e}"
+    except Exception as e:
+        print(f"Unexpected error generating room report: {e}")
+        return False, f"An unexpected error occurred: {e}"
 
 # Role-Specific Menu Functions
 def admin_menu(conn, username):
@@ -2550,7 +3866,6 @@ def receptionist_menu(conn, username):
         elif choice == '6':
             change_password(conn, username)
         elif choice == '7':
-            print("Logging out...")
             return
         else:
             print("❌ Invalid option")
@@ -2585,36 +3900,67 @@ def accountant_menu(conn, username):
 def main():
     """Main application entry point"""
     print("=== HOSPITAL MANAGEMENT SYSTEM ===")
-    
+
     # Initialize admin account if not exists
-    initialize_admin()
-    
+    # Consider moving DB connection for initialization outside the main loop if needed only once
+    try:
+        initialize_admin()
+    except Exception as init_e:
+        print(f"❌ CRITICAL: Failed to initialize admin: {init_e}")
+        # Decide if the application should exit if admin init fails
+        # return
+
     while True:
-        # Authenticate user
+        # Authentication moved inside the loop for retries
         print("\n--- LOGIN ---")
-        username = input("Username: ")
-        password = getpass.getpass("Password: ")
-        conn = get_db_connection()
-        if not conn:
-            print("❌ Database connection error. Exiting...")
-        if not role or not conn:
-            print("❌ Authentication failed. Exiting...")
-            continue
-        print(f"\n🔑 Logged in as {username} with role {role}.")
-        
+        input_username = input("Username: ")
+        input_password = getpass.getpass("Password: ")
+
+        # Authenticate user
+        username, role, conn, role_id, error_message = authenticate_user(input_username, input_password)
+
+        # Check for authentication errors
+        if error_message:
+            print(f"\n❌ Login Failed: {error_message}")
+            # Optional: Add delay or attempt limit here
+            continue # Go back to the start of the loop to retry login
+
+        # Authentication successful
+        print(f"\n🔑 Logged in as {username} (Role: {role}).")
+        if role == 'doctor':
+             print(f"   Doctor ID: {role_id}")
+
+
+        active_connection = conn # Store the active connection
+
         try:
             # Launch appropriate menu based on role
             if role == 'admin':
-                admin_menu(conn, username)
+                admin_menu(active_connection, username)
             elif role == 'doctor':
-                doctor_menu(conn, role_id, username)
+                 # Ensure doctor_id (role_id) is valid before calling menu
+                 if role_id is not None:
+                     doctor_menu(active_connection, role_id, username)
+                 else:
+                      # This case should be caught by authenticate_user, but double-check
+                      print("❌ Error: Doctor logged in but DoctorID is missing. Logging out.")
             elif role == 'receptionist':
-                receptionist_menu(conn, username)
+                receptionist_menu(active_connection, username)
             elif role == 'accountant':
-                accountant_menu(conn, username)
+                accountant_menu(active_connection, username)
+            else:
+                 print(f"❌ Role '{role}' does not have an associated menu.")
+
+        except Exception as menu_e:
+             print(f"\n❌ An error occurred during operation: {menu_e}")
         finally:
-            conn.close()
-            print("🔒 Session ended. Returning to login...\n")
+            if active_connection and active_connection.open:
+                active_connection.close()
+                print("🔒 Database connection closed. Session ended.")
+            else:
+                 print("🔒 Session ended (Connection was already closed or invalid).")
+            print("Returning to login...\n")
+
 
 if __name__ == "__main__":
     main()

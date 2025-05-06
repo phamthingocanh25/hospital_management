@@ -5,6 +5,18 @@ from tkinter.font import Font
 from tkinter import simpledialog
 from tkinter import scrolledtext
 from tkcalendar import DateEntry
+from PIL import Image, ImageTk
+import tkinter as tk 
+from tkinter import ttk 
+from tkinter import messagebox 
+from PIL import Image, ImageDraw
+from tkinter import font as tkFont
+from tkcalendar import DateEntry
+from datetime import datetime, time, timedelta
+from tkinter import filedialog
+import csv
+
+
 
 # Custom color scheme
 BG_COLOR = "#f0f8ff"
@@ -13,15 +25,17 @@ BUTTON_HOVER = "#5f9ea0"
 TEXT_COLOR = "#2f4f4f"
 ACCENT_COLOR = "#008080"
 ENTRY_BG = "#ffffff"
-TITLE_FONT = ("Helvetica", 12, "bold") # Giảm cỡ chữ một chút
+TITLE_FONT = ("Helvetica", 12, "bold") 
 LABEL_FONT = ("Helvetica", 10)
 BUTTON_FONT = ("Helvetica", 10, "bold")
-TREEVIEW_FONT = ("Helvetica", 9) # Font cho treeview có thể nhỏ hơn
+TREEVIEW_FONT = ("Helvetica", 9)
 
 # Font settings
 TITLE_FONT = ("Helvetica", 14, "bold")
 LABEL_FONT = ("Helvetica", 10)
 BUTTON_FONT = ("Helvetica", 10, "bold")
+
+global_refresh_callbacks = {}
 
 def apply_styles(widget):
     # (Giữ nguyên hàm apply_styles của bạn)
@@ -77,533 +91,2588 @@ def center_window(window, width=None, height=None):
     window.geometry(f"+{x}+{y}")
 
 def open_login_window(root):
-    root.destroy()
-    
+    if root: # Check if root exists before destroying
+        root.destroy()
+
+    login_window = tk.Tk()
+    login_window.title("Hospital Management System - Login")
+    login_window.geometry("900x700") # Match example size
+    login_window.resizable(False, False) # Optional: prevent resizing
+
+    # --- Background Image Handling (from AppWithBackground example) ---
+    try:
+        # IMPORTANT: Change this path to your actual background image file
+        bg_image_path = "C:\\Users\\emily\\Downloads\\hospital_management-main\\anh_bv.png"
+        bg_image = Image.open(bg_image_path)
+        bg_image = bg_image.resize((900, 700), Image.Resampling.LANCZOS)
+        bg_photo = ImageTk.PhotoImage(bg_image)
+
+        bg_label = tk.Label(login_window, image=bg_photo)
+        bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+        bg_label.image = bg_photo # Keep a reference!
+        bg_label.lower() # Place background behind other widgets
+    except FileNotFoundError:
+        print(f"Warning: Background image '{bg_image_path}' not found. Using fallback color.")
+        login_window.config(bg="#f0f0f0") # Fallback background color
+    except Exception as e:
+        print(f"Error loading background image: {e}")
+        login_window.config(bg="#f0f0f0") # Fallback background color
+    # --- End Background Image Handling ---
+
+    # --- Centered Login Frame (from AppWithBackground example) ---
+    # Use ttk.Frame for potentially better theme integration if desired
+    main_frame = ttk.Frame(login_window, style='Login.TFrame', padding=(50, 30)) # Added padding
+    # Define a style for the frame to set background
+    style = ttk.Style()
+    style.configure('Login.TFrame', background='white', borderwidth=2, relief=tk.RIDGE)
+    main_frame.place(relx=0.5, rely=0.5, anchor="center", width=400, height=300)
+    # --- End Centered Login Frame ---
+
+    # --- Authentication Logic (Keep your original logic here) ---
     def authenticate_user_action():
         """Handles authentication for the login window"""
         username = username_entry.get()
         password = password_entry.get()
-    
-        user, role, conn, role_id, error = authenticate_user(username, password)
-    
-        if error:
-           messagebox.showerror("Login Failed", error)
-           return
-    
-        login_window.destroy()
 
-    # Proceed based on the role
-        welcome_messages = {
-        "admin": "Welcome Admin!",
-        "doctor": "Welcome Doctor!",
-        "receptionist": "Welcome Receptionist!",
-        "accountant": "Welcome Accountant!"
-        }
-    
-        if role in welcome_messages:
-        # Hiển thị thông báo và sau đó mở menu tương ứng
-           def open_role_menu():
-               if role == "admin":
-                  open_admin_menu(conn, username)
-               elif role == "doctor":
-                  open_doctor_menu(conn, role_id, username)
-               elif role == "receptionist":
-                  open_receptionist_menu(conn, username)
-               elif role == "accountant":
-                  open_accountant_menu(conn, username)
-        
-        # Hiển thị thông báo và sau khi đóng sẽ gọi open_role_menu
-           messagebox.showinfo("Login Successful", welcome_messages[role])
-           open_role_menu()
-        else:
-           messagebox.showerror("Login Failed", "Unknown role")
+        # !!! IMPORTANT: Your existing call to authenticate_user remains the same !!!
+        user, role, conn, role_id, error = authenticate_user(username, password)
+
+        if error:
+           messagebox.showerror("Login Failed", error, parent=login_window) # Add parent
+           login_window.focus_force() # Keep focus
            return
-    login_window = tk.Tk()
-    login_window.title("Hospital Management System - Login")
-    login_window.geometry("400x300")
-    login_window.config(bg=BG_COLOR)
-    center_window(login_window)
-    
-    # Main frame
-    main_frame = tk.Frame(login_window, bg=BG_COLOR)
-    main_frame.pack(pady=20, padx=20, fill=tk.BOTH, expand=True)
-    
+
+        login_window.destroy() # Close login window on success
+
+        # !!! IMPORTANT: Your existing role handling remains the same !!!
+        welcome_messages = {
+            "admin": "Welcome Admin!",
+            "doctor": "Welcome Doctor!",
+            "receptionist": "Welcome Receptionist!",
+            "accountant": "Welcome Accountant!",
+            "pharmacist":"Welcome Pharmacist!",
+            "nurse": "Welcome Nurse!",
+            "director": "Welcome Director!",
+            "inventory_manager": "Welcome Inventory Manager!",
+
+        }
+
+        if role in welcome_messages:
+            def open_role_menu():
+                if role == "admin":
+                    open_admin_menu(conn, username) # Pass conn and username
+                elif role == "doctor":
+                    open_doctor_menu(conn, role_id, username) # Pass conn, role_id (DoctorID), username
+                elif role == "receptionist":
+                    open_receptionist_menu(conn, username) # Pass conn and username
+                elif role == "accountant":
+                    open_accountant_menu(conn, username) # Pass conn and username
+                elif role == "pharmacist":
+                    open_pharmacist_menu(conn, username) # Pass conn and username
+                elif role == "nurse":
+                    open_nurse_menu(conn, username) # Pass conn and username
+                elif role == "director":
+                    open_director_menu(conn, username) # Pass conn and username
+                elif role == "inventory_manager":
+                     open_inventory_manager_menu(conn, username) # Pass conn and username 
+                
+                else:
+                     messagebox.showerror("Login Error", f"No menu defined for role: {role}")
+                     main() # Go back to initial screen or handle appropriately
+
+            # Show welcome message first, then open the specific menu
+            messagebox.showinfo("Login Successful", welcome_messages[role])
+            open_role_menu()
+        else:
+            messagebox.showerror("Login Failed", f"Unknown or unsupported role: {role}")
+            # Decide what to do for unknown roles, e.g., go back to main screen
+            main() # Or just return, or try login again
+
+    # --- Login Widgets (Styled like AppWithBackground example) ---
     # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Hospital Management System",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
-    
-    # Login form frame
-    form_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    form_frame.pack(pady=10)
-    
+    # Use ttk Label for consistency if using ttk Frame
+    title_label = ttk.Label(main_frame, text="SYSTEM LOGIN",
+                            font=("Arial", 16, "bold"), background="white")
+    title_label.pack(pady=20)
+
     # Username
-    tk.Label(form_frame, text="Username:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
-    username_entry = tk.Entry(form_frame)
-    username_entry.grid(row=0, column=1, pady=5, padx=5)
-    apply_styles(username_entry)
-    
+    # Use ttk Label for consistency
+    ttk.Label(main_frame, text="Username:", background="white",
+              font=("Arial", 10)).pack(padx=20, anchor="w")
+    username_entry = ttk.Entry(main_frame, width=30, font=("Arial", 10))
+    username_entry.pack(padx=20, pady=5, fill=tk.X) # Use fill=tk.X
+
     # Password
-    tk.Label(form_frame, text="Password:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
-    password_entry = tk.Entry(form_frame, show="*")
-    password_entry.grid(row=1, column=1, pady=5, padx=5)
-    apply_styles(password_entry)
-    
+    # Use ttk Label for consistency
+    ttk.Label(main_frame, text="Password:", background="white",
+              font=("Arial", 10)).pack(padx=20, anchor="w")
+    password_entry = ttk.Entry(main_frame, width=30, show="*", font=("Arial", 10))
+    password_entry.pack(padx=20, pady=5, fill=tk.X) # Use fill=tk.X
+
+    # Bind Enter key for convenience
+    username_entry.bind("<Return>", lambda event: password_entry.focus())
+    password_entry.bind("<Return>", lambda event: authenticate_user_action())
+
     # Login button
-    login_button = tk.Button(
-        main_frame,
-        text="Login",
-        command=authenticate_user_action
-    )
-    apply_styles(login_button)
-    login_button.pack(pady=20)
-    
+    # Use ttk Button for consistency
+    login_btn = ttk.Button(main_frame, text="Login", width=15,
+                           command=authenticate_user_action, style='Login.TButton') # Optional style
+    # Define style for button if needed
+    style.configure('Login.TButton', font=("Arial", 10, "bold"), padding=(10, 5))
+    login_btn.pack(pady=20)
+    # --- End Login Widgets ---
+
+    # --- Copyright Label (from AppWithBackground example) ---
+    # Placed directly on the window, not the centered frame
+    copyright_label = tk.Label(login_window, text="© 2025 Hospital Management System",
+                               font=("Arial", 8), bg="#333333", fg="white")
+    copyright_label.pack(side="bottom", fill="x")
+    # --- End Copyright Label ---
+
+    # Center the window on the screen AFTER creating widgets
+    center_window(login_window, 800, 600)
     login_window.mainloop()
 
-def open_admin_menu(conn, username):
-    admin_window = tk.Tk()
-    admin_window.title(f"Admin Menu - {username}")
-    admin_window.geometry("1000x700")
-    admin_window.config(bg=BG_COLOR)
-    center_window(admin_window)
-    admin_window.lift()
-    admin_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
-    admin_window.after(100, lambda: admin_window.attributes('-topmost', False))
+def admin_menu_item_clicked(item_name, conn, username, admin_window, refresh_callback):
+    """Calls the appropriate original GUI function based on the menu item clicked."""
+    print(f"Admin action requested: {item_name}") # For debugging
 
-    title = tk.Label(admin_window, text="Admin Dashboard", font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR)
-    title.pack(pady=10)
+    # Map button labels (use English) to the original functions
+    action_map = {
+        # Doctor Menu Items
+        "Add Doctor": lambda: add_doctor_gui(conn),
+        "Delete Doctor": lambda: delete_doctor_gui(conn),
+        "Update Doctor Info": lambda: update_doctor_info_gui(conn),
+        "Assign Doctor to User": lambda: assign_doctor_user_gui(conn),
+        "View Doctors": lambda: view_doctor_gui(conn),
+        "Disable Doctor": lambda: disable_doctor_gui(conn),
 
-    # Container for categories
-    menubar = Menu(admin_window)
+        # Patient Menu Items
+        "Add Patient": lambda: add_patient_gui(conn),
+        "Delete Patient": lambda: delete_patient_gui(conn),
+        "View Patients": lambda: view_patient_gui(conn),
+        "Update Patient Info": lambda: update_patient_info_gui(conn),
+        "Disable Patient Account": lambda: disable_patient_account_gui(conn),
+        "View Emergency Contacts": lambda: view_emergency_contacts_gui(conn),
+        "Add Emergency Contact": lambda: add_emergency_contact_gui(conn),
+        "Update Emergency Contact": lambda: update_emergency_contact_gui(conn),
+        "Delete Emergency Contact": lambda: delete_emergency_contact_gui(conn),
 
-    def safe_call(func, *args, **kwargs):
+        # Department Menu Items
+        "View Departments": lambda: view_departments_gui(conn),
+        "Add Department": lambda: add_department_gui(conn),
+        "Update Department": lambda: update_department_gui(conn),
+
+        # Appointment Menu Items
+        "Schedule Appointment": lambda: schedule_appointment_gui(conn),
+        "View Appointments": lambda: view_appointments_gui(conn, 'admin'), # Specify role
+        "Update Appointment Status": lambda: update_appointment_status_gui(conn),
+
+        # Room Menu Items
+        "View Rooms": lambda: view_rooms_gui(conn),
+        "Add Room": lambda: add_room_gui(conn),
+        "Update Room": lambda: update_room_gui(conn),
+        "Disable Room": lambda: disable_room_gui(conn),
+        "View Room Types": lambda: view_room_types_gui(conn),
+        "Add Room Type": lambda: add_room_type_gui(conn),
+        "Update Room Type": lambda: update_room_type_gui(conn),
+        "Assign Room": lambda: assign_room_gui(conn),
+
+        # Service Menu Items
+        "View Services": lambda: view_services_gui(conn),
+        "Add Service": lambda: add_service_gui(conn),
+        "Update Service": lambda: update_service_gui(conn),
+
+        # Patient Service Menu Items
+        "View Patient Services": lambda: view_patient_services_gui(conn),
+        "Add Patient Service": lambda: add_patient_service_gui(conn),
+        "Delete Patient Service": lambda: delete_patient_service_gui(conn),
+
+        # Prescription Menu Items
+        "View Prescriptions": lambda: view_prescriptions_gui(conn),
+        "Create Prescription": lambda: create_prescription_gui(conn, None), # Admin might not have a specific doctor ID? Or needs selection. Pass None for now.
+        "Delete Prescription": lambda: delete_prescription_gui(conn),
+        "Delete Prescription Item": lambda: delete_prescription_details_gui(conn),
+
+        # Medicine Menu Items
+        "View Medicines": lambda: view_medicine_gui(conn),
+        "Add Medicine": lambda: add_medicine_gui(conn),
+        "Update Medicine": lambda: update_medicine_gui(conn),
+        "Delete Medicine": lambda: delete_medicine_gui(conn),
+        "View Medicine Batches": lambda: view_medicine_batches_gui(conn),
+        "Add Medicine Batch": lambda: add_medicine_batch_gui(conn),
+        "Update Medicine Batch": lambda: update_medicine_batch_gui(conn),
+        "Delete Medicine Batch": lambda: delete_medicine_batch_gui(conn),
+        "Adjust Medicine Stock": lambda: adjust_medicine_batch_gui(conn),
+
+        # Inventory Menu Items
+        "View Inventory": lambda: view_inventory_gui(conn),
+        "Add Inventory Item": lambda: add_inventory_gui(conn),
+        "Update Inventory Item": lambda: update_inventory_gui(conn),
+        "Disable Inventory Item": lambda: disable_inventory_item_gui(conn), # Needs Inventory ID - how to get? Maybe disable button for now.
+        "Adjust Inventory": lambda: adjust_inventory_gui(conn),
+
+        # Insurance Menu Items
+        "View Insurance": lambda: view_insurance_gui(conn),
+        "Create Insurance": lambda: add_insurance_gui(conn),
+        "Update Insurance": lambda: update_insurance_gui(conn),
+        "Delete Insurance": lambda: delete_insurance_gui(conn),
+
+        # Invoice Menu Items
+        "View Invoices": lambda: view_invoices_gui(conn),
+        "Create Invoice": lambda: create_invoice_gui(conn),
+
+        # Reports Menu Items
+        "Financial Report": lambda: generate_financial_report_gui(conn),
+        "Room Report": lambda: get_room_statistics_gui(conn),
+        "Statistics Report": lambda: generate_statistics_gui(conn), # Added this based on your functions
+
+        # System Menu Items
+        "Register New User": lambda: register_user_gui(conn),
+        "Delete User": lambda: delete_user_gui(conn),
+        "View System Users": lambda: view_system_users_gui(conn), # Added this based on your functions
+        "Change Password": lambda: change_password_gui(conn, username),
+        "Logout": lambda: logout_action(admin_window),
+    }
+
+    action = action_map.get(item_name)
+    refresh_needed_actions = [
+        "Add Doctor", "Delete Doctor", "Disable Doctor",
+        "Add Patient", "Delete Patient", "Disable Patient Account",
+        "Schedule Appointment", "Update Appointment Status", # Có thể ảnh hưởng Appointments Today
+        "Assign Room", "Disable Room", "Add Room" # Có thể ảnh hưởng Available Rooms
+    ]
+    if action:
         try:
-            func(*args, **kwargs)
+            # Execute the original GUI function, which will likely open a Toplevel
+            action()
+            if item_name in refresh_needed_actions and callable(refresh_callback):
+                 # Đợi một chút để cửa sổ Toplevel có thể đã đóng
+                 # và DB có thời gian cập nhật (nếu cần)
+                 print(f"Action '{item_name}' completed, scheduling stats refresh.")
+                 admin_window.after(200, refresh_callback) # Gọi hàm refresh sau 200ms
         except Exception as e:
-            messagebox.showerror("Error", str(e))
-    
-    def add_submenu(menu, name, items):
-        submenu = tk.Menu(menu, tearoff=0)
-        for item in items:
-            submenu.add_command(label=item[0], command=lambda f=item[1]: safe_call(f))
-        menu.add_cascade(label=name, menu=submenu)
+            messagebox.showerror("Error", f"Failed to perform action '{item_name}':\n{str(e)}", parent=admin_window)
+            if admin_window.winfo_exists(): admin_window.focus_force()
+    else:
+        # Xử lý các hành động chưa được map
+        print(f"Action for '{item_name}' not yet implemented.")
+        messagebox.showinfo("Info", f"Action for '{item_name}' is not yet implemented.", parent=admin_window)
+        if admin_window.winfo_exists(): admin_window.focus_force()
 
-    # Define menu structure
-    add_submenu(menubar, "Doctor", [
-            ("Add Doctor", lambda: add_doctor_gui(conn)),
-            ("Delete Doctor", lambda: delete_doctor_gui(conn)),
-            ("Update Doctor Info", lambda: update_doctor_info_gui(conn)),
-            ("Assign Doctor to User", lambda: assign_doctor_user_gui(conn)),
-            ("View Doctor", lambda: view_doctor_gui(conn)),
-            ("Disable Doctor", lambda: disable_doctor_gui(conn)),
-        ])
-    add_submenu(menubar, "Patient", [
-            ("Add Patient", lambda: add_patient_gui(conn)),
-            ("Delete Patient", lambda: delete_patient_gui(conn)),
-            ("View Patient", lambda: view_patient_gui(conn)),
-            ("Update Patient Info", lambda: update_patient_info_gui(conn)),
-            ("Disable Patient", lambda: disable_patient_account_gui(conn)),
-            ("View Emergency Contacts", lambda: view_emergency_contacts_gui(conn)),
-            ("Add Emergency Contact", lambda: add_emergency_contact_gui(conn)),
-            ("Update Emergency Contact", lambda: update_emergency_contact_gui(conn)),
-            ("Delete Emergency Contact", lambda: delete_emergency_contact_gui(conn)),
-        ])
-    add_submenu(menubar, "Department", [
-            ("View Departments", lambda: view_departments_gui(conn)),
-            ("Add Department", lambda: add_department_gui(conn)),
-            ("Update Department", lambda: update_department_gui(conn)),
-        ])
-    add_submenu(menubar, "Appointment", [
-            ("Schedule Appointment", lambda: schedule_appointment_gui(conn)),
-            ("View Appointments", lambda: view_appointments_gui(conn, 'admin')),
-            ("Update Status", lambda: update_appointment_status_gui(conn)),
-        ])
-    add_submenu(menubar, "Room", [
-            ("View Rooms", lambda: view_rooms_gui(conn)),
-            ("Add Room", lambda: add_room_gui(conn)),
-            ("Update Room", lambda: update_room_gui(conn)),
-            ("Disable Room", lambda: disable_room_gui(conn)),
-            ("View Room Types", lambda: view_room_types_gui(conn)),
-            ("Add Room Type", lambda: add_room_type_gui(conn)),
-            ("Update Room Type", lambda: update_room_type_gui(conn)),
-            ("Assign Room", lambda: assign_room_gui(conn)),
-        ])
-    add_submenu(menubar, "Service", [
-            ("View Services", lambda: view_services_gui(conn)),
-            ("Add Service", lambda: add_service_gui(conn)),
-            ("Update Service", lambda: update_service_gui(conn)),
-        ])
-    add_submenu(menubar, "Patient Service", [
-            ("View Patient Services", lambda: view_patient_services_gui(conn)),
-            ("Add Patient Service", lambda: add_patient_service_gui(conn)),
-            ("Delete Patient Service", lambda: delete_patient_service_gui(conn)),
-        ])
-    add_submenu(menubar, "Prescription", [
-            ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
-            ("Create Prescription", lambda: create_prescription_gui(conn)),
-            ("Delete Prescription", lambda: delete_prescription_gui(conn)),
-            ("Delete Prescription Item", lambda: delete_prescription_details_gui(conn)),
-        ])
-    add_submenu(menubar, "Medicine", [
-            ("View Medicines", lambda: view_medicine_gui(conn)),
-            ("Add Medicine", lambda: add_medicine_gui(conn)),
-            ("Update Medicine", lambda: update_medicine_gui(conn)),
-            ("Delete Medicine", lambda: delete_medicine_gui(conn)),
-            ("View Medicine Batch", lambda: view_medicine_batches_gui(conn)),
-            ("Add Medicine Batch", lambda: add_medicine_batch_gui(conn)),
-            ("Update Medicine Batch", lambda: update_medicine_batch_gui(conn)),
-            ("Delete Medicine Batch", lambda: delete_medicine_batch_gui(conn)),
-            ("Adjust Medicine Stock", lambda: adjust_medicine_batch_gui(conn)),
-        ])
-    add_submenu(menubar, "Inventory", [
-            ("View Inventory", lambda: view_inventory_gui(conn)),
-            ("Add Inventory Item", lambda: add_inventory_gui(conn)),
-            ("Update Inventory Item", lambda: update_inventory_gui(conn)),
-            ("Disable Inventory Item", lambda: disable_inventory_item_gui(conn)),
-            ("Adjust Inventory", lambda: adjust_inventory_gui(conn)),
-        ])
-    add_submenu(menubar, "Insurance", [
-            ("View Insurance", lambda: view_insurance_gui(conn)),
-            ("Create Insurance", lambda: add_insurance_gui(conn)),
-            ("Update Insurance", lambda: update_insurance_gui(conn)),
-            ("Delete Insurance", lambda: delete_insurance_gui(conn)),
-        ])
-    add_submenu(menubar, "Invoice", [
-            ("View Invoices", lambda: view_invoices_gui(conn)),
-            ("Create Invoice", lambda: create_invoice_gui(conn)),
-        ])
-    add_submenu(menubar, "Reports", [
-            ("Financial Report", lambda: generate_financial_report_gui(conn)),
-            ("Room Report", lambda: get_room_statistics_gui(conn)),
-        ])
-    add_submenu(menubar, "System", [
-            ("Register New User", lambda: register_user_gui(conn)),
-            ("Delete User", lambda: delete_user_gui(conn)),
-            ("Change Password", lambda: change_password_gui(conn, username)),
-            ("Logout", lambda: logout_action(admin_window)),
-        ])
+def open_admin_menu(conn, username):
+    """
+    Opens the Admin Dashboard window with the new layout and fetches stats.
 
-    # Create button for each main category
-    admin_window.config(menu=menubar)
+    Args:
+        conn: The database connection object.
+        username (str): The username of the logged-in admin.
+    """
+    admin_window = tk.Tk()
+    admin_window.title(f"Admin Dashboard - {username}")
+    admin_window.geometry("1200x700")
+    admin_window.resizable(False, False)
+
+    # --- Background Image Handling ---
+    bg_photo_ref = None
+    try:
+        bg_image_path = "hospital_bg.jpg" # Đổi đường dẫn nếu cần
+        bg_image = Image.open(bg_image_path)
+        bg_image = bg_image.resize((1200, 700), Image.Resampling.LANCZOS)
+        bg_photo_ref = ImageTk.PhotoImage(bg_image)
+        bg_label = tk.Label(admin_window, image=bg_photo_ref)
+        bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+    except Exception as e:
+        print(f"Warning: Could not load background image '{bg_image_path}'. Error: {e}")
+        admin_window.config(bg="#f0f2f5")
+    # --- End Background Image Handling ---
+
+    # --- Left Menu Frame ---
+    # ... (code tạo menu bên trái giữ nguyên như trước) ...
+    menu_frame = tk.Frame(admin_window, bg="#2c3e50", width=250)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    title_label = tk.Label(menu_frame, text="ADMIN MENU", font=("Arial", 16, "bold"),
+                           fg="white", bg="#2c3e50", pady=20)
+    title_label.pack(fill="x")
+
+    menu_canvas = tk.Canvas(menu_frame, bg="#2c3e50", highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg="#2c3e50")
+
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    menu_scrollbar.pack(side="right", fill="y")
+
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+
+    def _on_mousewheel_menu(event):
+        if event.num == 4 or event.delta > 0:
+            menu_canvas.yview_scroll(-1, "units")
+        elif event.num == 5 or event.delta < 0:
+            menu_canvas.yview_scroll(1, "units")
+
+    for widget in [menu_canvas, menu_buttons_frame]:
+        widget.bind("<MouseWheel>", _on_mousewheel_menu)
+        widget.bind("<Button-4>", _on_mousewheel_menu)
+        widget.bind("<Button-5>", _on_mousewheel_menu)
+
+    menu_items = [ # Giữ nguyên danh sách menu items của bạn
+        ("Doctor", "--- DOCTOR ---"), "Add Doctor", "Delete Doctor", "Update Doctor Info", "Assign Doctor to User", "View Doctors", "Disable Doctor",
+        ("Patient", "--- PATIENT ---"), "Add Patient", "Delete Patient", "View Patients", "Update Patient Info", "Disable Patient Account", "View Emergency Contacts", "Add Emergency Contact", "Update Emergency Contact", "Delete Emergency Contact",
+        ("Department", "--- DEPARTMENT 🏥---"), "View Departments", "Add Department", "Update Department",
+        ("Appointment", "--- APPOINTMENT ---"), "Schedule Appointment", "View Appointments", "Update Appointment Status",
+        ("Room", "--- ROOM ---"), "View Rooms", "Add Room", "Update Room", "Disable Room", "View Room Types", "Add Room Type", "Update Room Type", "Assign Room",
+        ("Service", "--- SERVICE ---"), "View Services", "Add Service", "Update Service",
+        ("Patient Service", "--- PATIENT SERVICE ---"), "View Patient Services", "Add Patient Service", "Delete Patient Service",
+        ("Prescription", "--- PRESCRIPTION ---"), "View Prescriptions", "Create Prescription", "Delete Prescription", "Delete Prescription Item",
+        ("Medicine", "--- MEDICINE ---"), "View Medicines", "Add Medicine", "Update Medicine", "Delete Medicine", "View Medicine Batches", "Add Medicine Batch", "Update Medicine Batch", "Delete Medicine Batch", "Adjust Medicine Stock",
+        ("Inventory", "--- INVENTORY ---"), "View Inventory", "Add Inventory Item", "Update Inventory Item", "Adjust Inventory",
+        ("Insurance", "--- INSURANCE ---"), "View Insurance", "Create Insurance", "Update Insurance", "Delete Insurance",
+        ("Invoice", "--- INVOICE ---"), "View Invoices", "Create Invoice",
+        ("Reports", "--- REPORTS ---"), "Financial Report", "Room Report", "Statistics Report",
+        ("System", "--- SYSTEM ---"), "Register New User", "Delete User", "View System Users", "Change Password", "Logout"
+    ]
+
+    for item in menu_items:
+        is_separator = isinstance(item, tuple)
+        if is_separator:
+            category_title = item[1]
+            separator_label = tk.Label(menu_buttons_frame, text=category_title, font=("Arial", 10, "italic"), fg="#aed6f1", bg="#2c3e50", anchor="w")
+            separator_label.pack(fill="x", padx=10, pady=(10, 2))
+            separator_label.bind("<MouseWheel>", _on_mousewheel_menu); separator_label.bind("<Button-4>", _on_mousewheel_menu); separator_label.bind("<Button-5>", _on_mousewheel_menu)
+        else:
+            button_text = item
+            btn = tk.Button(menu_buttons_frame, text=button_text, font=("Arial", 11), bg="#34495e", fg="white", bd=0, padx=20, pady=8, width=25, anchor="w",
+                            # <<< TRUYỀN HÀM REFRESH VÀO DISPATCHER >>>
+                            command=lambda name=button_text: admin_menu_item_clicked(name, conn, username, admin_window, refresh_dashboard_statistics)) # Thêm refresh_dashboard_statistics
+            btn.pack(fill="x", padx=10, pady=1)
+            default_bg = "#34495e"; hover_bg = "#3d566e"
+            btn.bind("<Enter>", lambda e, b=btn, h_bg=hover_bg: b.config(bg=h_bg))
+            btn.bind("<Leave>", lambda e, b=btn, d_bg=default_bg: b.config(bg=d_bg))
+            btn.bind("<MouseWheel>", _on_mousewheel_menu); btn.bind("<Button-4>", _on_mousewheel_menu); btn.bind("<Button-5>", _on_mousewheel_menu)
+    # --- End Left Menu Frame ---
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(admin_window, bg="#f0f2f5")
+    dash_frame.pack(side="right", fill="both", expand=True)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg="#3498db", height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    header_label = tk.Label(header_frame, text="Admin Dashboard", font=("Arial", 20, "bold"), fg="white", bg="#3498db")
+    header_label.pack(side="left", padx=30, pady=20)
+    user_frame = tk.Frame(header_frame, bg="#3498db")
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg="#3498db").pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Administrator", font=("Arial", 10), fg="#eaf2f8", bg="#3498db").pack(side="bottom", anchor="e")
+
+    # Content Frame
+    content_frame = tk.Frame(dash_frame, bg="#f0f2f5", padx=20, pady=20)
+    content_frame.pack(fill="both", expand=True)
+
+    # --- * MỚI: Lấy dữ liệu cho các ô thống kê * ---
+    def get_dashboard_stats(db_conn):
+        stats_data = {"total_doctors": "E", "active_patients": "E", "appointments_today": "E", "available_rooms": "E"}
+        if not db_conn: return stats_data
+        try:
+            with db_conn.cursor() as cursor:
+                # !! Nhớ điều chỉnh các câu lệnh SQL này cho phù hợp CSDL của bạn !!
+                cursor.execute("SELECT COUNT(*) as count FROM Doctors WHERE Status = 'Active'")
+                result = cursor.fetchone(); stats_data["total_doctors"] = str(result['count']) if result else "0"
+                cursor.execute("SELECT COUNT(*) as count FROM Patients WHERE Status = 'Active'")
+                result = cursor.fetchone(); stats_data["active_patients"] = str(result['count']) if result else "0"
+                cursor.execute("SELECT COUNT(*) as count FROM Appointments WHERE DATE(AppointmentDate) = CURDATE() AND Status = 'Scheduled'")
+                result = cursor.fetchone(); stats_data["appointments_today"] = str(result['count']) if result else "0"
+                cursor.execute("SELECT COUNT(*) as count FROM Rooms WHERE Status = 'Available'")
+                result = cursor.fetchone(); stats_data["available_rooms"] = str(result['count']) if result else "0"
+        except Exception as e: print(f"Database error fetching dashboard stats: {e}")
+        return stats_data
+
+    # Gọi hàm để lấy dữ liệu, truyền kết nối 'conn' vào
+    dashboard_stats = get_dashboard_stats(conn)
+    # --- * KẾT THÚC LẤY DỮ LIỆU * ---
+
+    # --- Tạo các ô thống kê với dữ liệu đã lấy ---
+    stats_frame = tk.Frame(content_frame, bg="#f0f2f5")
+    stats_frame.pack(fill=tk.X, pady=(10, 20)) # Thêm padding trên
+    stat_value_labels = {} # Dictionary để lưu các label hiển thị số liệu
+    stats_data_initial = get_dashboard_stats(conn)
+
+    # Sử dụng dữ liệu từ dashboard_stats thay vì "?"
+    stats_definitions = [
+        {"title": "Total Doctors", "key": "total_doctors", "color": "#e74c3c"},
+        {"title": "Active Patients", "key": "active_patients", "color": "#3498db"},
+        {"title": "Appointments Today", "key": "appointments_today", "color": "#2ecc71"},
+        {"title": "Available Rooms", "key": "available_rooms", "color": "#f39c12"}
+    ]
+
+
+    for stat_def in stats_definitions:
+        card = tk.Frame(stats_frame, bg="white", bd=0, highlightthickness=1,
+                       highlightbackground="#dddddd", padx=20, pady=15)
+        card.pack(side="left", fill="both", expand=True, padx=10)
+
+        tk.Label(card, text=stat_def["title"], font=("Arial", 12),
+               fg="#7f8c8d", bg="white").pack(anchor="w")
+
+        # Tạo label giá trị và lưu tham chiếu vào dictionary
+        value_text = stats_data_initial.get(stat_def["key"], "E") # Lấy giá trị ban đầu
+        value_label = tk.Label(card, text=value_text, font=("Arial", 24, "bold"),
+                               fg=stat_def["color"], bg="white")
+        value_label.pack(anchor="w", pady=5)
+        stat_value_labels[stat_def["key"]] = value_label # Lưu label theo key dữ liệu
+
+        card.bind("<Enter>", lambda e, c=card: c.config(highlightbackground="#bbbbbb"))
+        card.bind("<Leave>", lambda e, c=card: c.config(highlightbackground="#dddddd"))
+    # --- Kết thúc tạo ô thống kê ---
+    def refresh_dashboard_statistics():
+        print("Refreshing dashboard statistics...") # Debug message
+        new_stats_data = get_dashboard_stats(conn)
+        for key, label_widget in stat_value_labels.items():
+            new_value = new_stats_data.get(key, "E") # Lấy giá trị mới theo key
+            if label_widget.winfo_exists(): # Kiểm tra xem label còn tồn tại không
+                 label_widget.config(text=str(new_value))
+            else:
+                 print(f"Warning: Label for '{key}' no longer exists.")
+        print("Dashboard statistics updated.")
+
+    refresh_btn = tk.Button(header_frame, text="Refresh Stats", command=refresh_dashboard_statistics,
+                            font=("Arial", 9), bg="#2980b9", fg="white", relief=tk.RAISED, bd=1)
+    # Căn chỉnh nút refresh ở góc trên bên phải header, trước user_frame
+    refresh_btn.pack(side="right", padx=(0, 10), pady=5)
+    # --- Placeholder cho biểu đồ ---
+    chart_frame = tk.Frame(content_frame, bg="white", height=250, bd=0,
+                           highlightthickness=1, highlightbackground="#dddddd")
+    chart_frame.pack(fill="both", expand=True, pady=20)
+    chart_frame.pack_propagate(False)
+    tk.Label(chart_frame, text="Activity Overview (Placeholder)", font=("Arial", 14, "bold"),
+           fg="#34495e", bg="white").pack(side="top", anchor="nw", padx=15, pady=10)
+    tk.Label(chart_frame, text="Charts or detailed tables can be added here later.", font=("Arial", 11),
+           fg="#7f8c8d", bg="white").pack(padx=15, pady=10)
+    # --- End Placeholder ---
+
+    # --- End Main Dashboard Area ---
+
+    # Center window and run main loop
+    center_window(admin_window, 1200, 700)
     admin_window.mainloop()
-
-def open_doctor_menu(conn, role_id, username):
+def open_doctor_menu(conn, doctor_id, username):
+    """Mở cửa sổ Bảng điều khiển Bác sĩ với giao diện hiện đại, rõ ràng."""
+    # Lưu ý: Sử dụng tk.Toplevel() thường tốt hơn cho cửa sổ phụ
+    # nhưng giữ tk.Tk() để nhất quán với các hàm menu khác trong file của bạn.
     doctor_window = tk.Tk()
-    doctor_window.title(f"Doctor Menu - {username}")
-    doctor_window.geometry("700x500")
-    doctor_window.config(bg=BG_COLOR)
-    center_window(doctor_window)
-    
-    # Main frame
-    main_frame = tk.Frame(doctor_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Doctor Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
-    
-    # Buttons
+    doctor_window.title(f"Doctor Dashboard - {username} (ID: {doctor_id})")
+    # Kích thước cửa sổ linh hoạt hơn một chút
+    doctor_window.geometry("1200x700")
+    # Cho phép thay đổi kích thước tối thiểu
+    doctor_window.minsize(1000, 600)
+    doctor_window.configure(bg="#ffffff")  # Nền trắng
     buttons = [
-        ("View Appointments", lambda: view_appointments_gui(conn, 'doctor', role_id)),
+        # ... (keep existing buttons) ...
+        ("Order Admission", lambda: order_admission_gui(conn, doctor_id)), 
+        ("View Appointments", lambda: view_appointments_gui(conn, 'doctor', doctor_id)),
         ("Update Appointment Status", lambda: update_appointment_status_gui(conn)),
         ("View Patient", lambda: view_patient_gui(conn)),
         ("View Emergency Contacts", lambda: view_emergency_contacts_gui(conn)),
         ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
-        ("Create Prescription", lambda: create_prescription_gui(conn)),
+        ("Create Prescription", lambda: create_prescription_gui(conn, doctor_id)),
         ("Delete Prescription Item", lambda: delete_prescription_details_gui(conn)),
         ("View Services", lambda: view_services_gui(conn)),
         ("View Medicines", lambda: view_medicine_gui(conn)),
         ("View Insurance", lambda: view_insurance_gui(conn)),
         ("View Rooms", lambda: view_rooms_gui(conn)),
         ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", doctor_window.destroy)
+        ("Logout", lambda: logout_action(doctor_window)) # Fixed: Use logout_action
     ]
-    
-    for text, command in buttons:
-        btn = tk.Button(
-            main_frame,
-            text=text,
-            command=command,
-            width=30
-        )
-        apply_styles(btn)
-        btn.pack(pady=5, fill=tk.X)
-    
-    doctor_window.mainloop()
 
+    # Bảng màu hiện đại (giữ nguyên từ code của bạn)
+    primary_color = "#4a6fa5"
+    secondary_color = "#6bbd99"
+    accent_color = "#5d9cec"
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#2c3e50"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#34495e"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
+
+    # Cài đặt font (giữ nguyên từ code của bạn)
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        # Đảm bảo font được tải
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        print("Cảnh báo: Không tìm thấy font 'Segoe UI', sử dụng font dự phòng.")
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
+
+    # --- Khung Menu Bên Trái ---
+    menu_frame = tk.Frame(doctor_window, bg=menu_bg, width=230) # Tăng nhẹ chiều rộng
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    # Khung Header trong Menu (Thông tin bác sĩ)
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170) # Tăng chiều cao
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar (hình tròn)
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10)) # Tăng khoảng đệm trên
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'D',
+                              font=(title_font[0], 24, "bold"), fill="white") # Tăng kích thước chữ
+
+    # Tên bác sĩ
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"), # Tăng kích thước
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+
+    # Lấy tên khoa từ CSDL (logic giữ nguyên)
+    department_name = "Unknown Department" # Giá trị mặc định tốt hơn
+    try:
+        if conn:
+            # Sử dụng try-with-resources để đảm bảo cursor được đóng
+            with conn.cursor() as cursor:
+                query = """
+                SELECT dep.DepartmentName
+                FROM Doctors doc
+                JOIN Departments dep ON doc.DepartmentID = dep.DepartmentID
+                WHERE doc.DoctorID = %s
+                """
+                cursor.execute(query, (doctor_id,))
+                result = cursor.fetchone()
+                if result and result.get('DepartmentName'):
+                    department_name = result['DepartmentName']
+    except Exception as e:
+        # Ghi log lỗi cụ thể hơn
+        print(f"Lỗi khi lấy tên khoa cho DoctorID {doctor_id}: {e}")
+        # Sử dụng parent=doctor_window để messagebox hiện trên cửa sổ doctor
+        messagebox.showwarning("Database Warning", f"Could not fetch department name: {e}", parent=doctor_window)
+
+    department_label = tk.Label(menu_header_frame, text=department_name,
+                                fg="#bdc3c7", bg=menu_header_bg, font=small_font)
+    department_label.pack(pady=(0, 15))
+
+    # --- Các Mục Menu (với thanh cuộn) ---
+    menu_items_container = tk.Frame(menu_frame, bg=menu_bg)
+    menu_items_container.pack(fill="both", expand=True)
+
+    menu_canvas = tk.Canvas(menu_items_container, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_items_container, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg) # Frame chứa các nút menu
+
+    # Đặt frame chứa nút vào canvas
+    menu_canvas_window = menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+
+    # Cập nhật vùng cuộn khi kích thước frame thay đổi
+    def _configure_menu_scrollregion(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        # Thêm dòng này để đảm bảo chiều rộng của frame bên trong canvas co giãn theo canvas
+        menu_canvas.itemconfig(menu_canvas_window, width=event.width)
+
+    menu_buttons_frame.bind("<Configure>", _configure_menu_scrollregion)
+    # Đảm bảo canvas cũng cập nhật chiều rộng frame khi kích thước canvas thay đổi
+    # canvas.bind("<Configure>", lambda e: menu_canvas.itemconfig(menu_canvas_window, width=e.width))
+
+
+    # Xử lý cuộn chuột cho menu (logic giữ nguyên)
+    def _on_mousewheel_menu(event):
+         # Sử dụng event.delta cho Windows/macOS, event.num cho Linux
+        if hasattr(event, 'delta') and event.delta != 0:
+             # Windows/macOS: delta thường là +/- 120
+             scroll_units = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5):
+             # Linux: num 4 là cuộn lên, 5 là cuộn xuống
+             scroll_units = -1 if event.num == 4 else 1
+        else:
+             return # Bỏ qua các sự kiện không xác định
+        menu_canvas.yview_scroll(scroll_units, "units")
+
+    # Gắn sự kiện cuộn chuột vào canvas và frame bên trong (và các widget con của frame)
+    # Việc gắn vào menu_buttons_frame giúp bắt sự kiện khi chuột ở trên khoảng trống giữa các nút
+    for widget in [menu_canvas, menu_buttons_frame]:
+         widget.bind_all("<MouseWheel>", _on_mousewheel_menu) # Windows/macOS
+         widget.bind_all("<Button-4>", _on_mousewheel_menu) # Linux scroll up
+         widget.bind_all("<Button-5>", _on_mousewheel_menu) # Linux scroll down
+
+
+    # --- Khu Vực Nội Dung Chính ---
+    content_frame = tk.Frame(doctor_window, bg=light_color)
+    content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # --- Hàm Hiển Thị Nội Dung (logic gần như giữ nguyên) ---
+    def clear_content():
+        """Xóa tất cả widget khỏi khung nội dung chính."""
+        # Sử dụng winfo_children() để lấy danh sách an toàn hơn
+        for widget in list(content_frame.winfo_children()):
+            widget.destroy()
+
+    def create_card(parent, title, value, color, icon=None):
+        """Tạo một thẻ (card) hiển thị thông tin."""
+        card = tk.Frame(parent, bg=card_bg, bd=0, relief="flat",
+                        highlightbackground=card_border, highlightthickness=1,
+                        padx=15, pady=15)
+
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+
+        if icon:
+            # Tăng kích thước icon
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"), # Tăng kích thước
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5) # Thêm padding
+
+        return card
+
+    def show_dashboard_content():
+        """Hiển thị nội dung của bảng điều khiển chính."""
+        clear_content()
+        try:
+            # Khung Header (Chào mừng, Ngày giờ)
+            header_frame = tk.Frame(content_frame, bg=light_color)
+            header_frame.pack(fill="x", pady=(0, 20))
+
+            # Hiển thị tên ngắn gọn hơn nếu tên dài
+            display_name = username.split()[0] if len(username.split()) > 1 else username
+            tk.Label(header_frame, text=f"Welcome, Dr. {display_name}",
+                     font=title_font, bg=light_color, fg=dark_color).pack(side="left")
+
+            tk.Label(header_frame, text=datetime.now().strftime("%A, %B %d, %Y"),
+                     font=small_font, bg=light_color, fg="#7f8c8d").pack(side="right", padx=10)
+
+            # Khung chứa các thẻ thống kê
+            stats_frame = tk.Frame(content_frame, bg=light_color)
+            stats_frame.pack(fill="x", pady=(0, 25))
+
+            # Lấy dữ liệu thống kê (Cần hàm thực tế từ core_logic.py)
+            stats_data = {"appointments": "N/A", "patients": "N/A", "prescriptions": "N/A"}
+            try:
+                 # Giả sử bạn có một hàm get_doctor_dashboard_stats trong core_logic.py
+                 # Nó trả về (True, {"appointments": count1, "patients": count2, "prescriptions": count3})
+                 # hoặc (False, error_message)
+                 success_stats, stats_result = get_doctor_dashboard_stats(conn, doctor_id)
+                 if success_stats:
+                     stats_data = stats_result # Mong đợi dict như {"appointments": 5, ...}
+                 else:
+                     print(f"Warning: Could not fetch dashboard stats: {stats_result}")
+                     # Hiển thị lỗi trên UI nếu cần
+                     # tk.Label(stats_frame, text=f"Error loading stats: {stats_result}", fg="red", bg=light_color).pack()
+            except NameError:
+                 # Nếu hàm get_doctor_dashboard_stats chưa được định nghĩa trong core_logic
+                 print("Warning: Hàm 'get_doctor_dashboard_stats' không tồn tại (sử dụng dữ liệu N/A).")
+            except Exception as e:
+                 print(f"Lỗi khi lấy dữ liệu thống kê dashboard: {e}")
+                 # Hiển thị lỗi trên UI nếu cần
+                 # tk.Label(stats_frame, text=f"Error loading stats: {e}", fg="red", bg=light_color).pack()
+
+
+            # Định nghĩa và tạo các thẻ thống kê
+            cards_info = [
+                ("Today's Appointments", stats_data.get("appointments", "N/A"), primary_color, "📅"),
+                ("Recent Patients", stats_data.get("patients", "N/A"), secondary_color, "👥"),
+                ("Recent Prescriptions", stats_data.get("prescriptions", "N/A"), accent_color, "💊")
+            ]
+
+            for i, (title, value, color, icon) in enumerate(cards_info):
+                card = create_card(stats_frame, title, value, color, icon)
+                card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+                stats_frame.grid_columnconfigure(i, weight=1) # Cho phép thẻ co giãn
+
+            # --- Khung Lịch hẹn sắp tới ---
+            appointments_container = tk.Frame(content_frame, bg=light_color)
+            appointments_container.pack(fill="both", expand=True)
+
+            # Hàm làm mới Treeview lịch hẹn
+            def refresh_appointments_view(tree_widget):
+                 # Kiểm tra xem widget còn tồn tại không trước khi thao tác
+                 if not tree_widget or not tree_widget.winfo_exists():
+                     print("Debug: Appointments tree widget no longer exists. Skipping refresh.")
+                     return
+                 try:
+                     # Xóa các item cũ một cách an toàn
+                     for item in tree_widget.get_children():
+                         tree_widget.delete(item)
+                 except tk.TclError as e:
+                     # Bắt lỗi nếu widget đã bị hủy trong quá trình xóa
+                     print(f"Debug: Error clearing appointments tree (widget might be destroyed): {e}")
+                     return # Không thể tiếp tục nếu widget không hợp lệ
+
+                 try:
+                     success, appts_data = search_appointments(
+                         conn,
+                         role='doctor',        # Vai trò hiện tại
+                         username=username,    # <<< THAY ĐỔI TẠI ĐÂY: Truyền username của bác sĩ
+                         year=datetime.now().year,
+                         month=datetime.now().month,
+                         day=datetime.now().day,
+                         status="Scheduled"    # Chỉ lấy các cuộc hẹn đã lên lịch cho hôm nay
+                     )
+
+                     if success:
+                          if appts_data: # Nếu có dữ liệu trả về
+                              for appt in appts_data:
+                                  # (Giữ nguyên phần xử lý và hiển thị dữ liệu)
+                                  appt_time_obj = appt.get("AppointmentTime")
+                                  time_str = "N/A"
+                                  if appt_time_obj is not None: # Quan trọng: Kiểm tra None trước
+                                     if isinstance(appt_time_obj, time):
+                                        time_str = appt_time_obj.strftime('%H:%M')
+                                     elif isinstance(appt_time_obj, datetime): # Nếu cột là DATETIME/TIMESTAMP
+                                          time_str = appt_time_obj.strftime('%H:%M')
+                                 # *** THÊM KIỂM TRA VÀ XỬ LÝ TIMEDELTA ***
+                                     elif isinstance(appt_time_obj, timedelta):
+                                      # Chuyển timedelta (số giây từ nửa đêm) thành chuỗi HH:MM
+                                          total_seconds = int(appt_time_obj.total_seconds())
+                                          hours = total_seconds // 3600
+                                          minutes = (total_seconds % 3600) // 60
+                                          time_str = f"{hours:02}:{minutes:02}"
+                                 # **************************************
+                                     elif isinstance(appt_time_obj, str): # Xử lý nếu CSDL trả về chuỗi
+                                          try:
+                                            parsed_time = datetime.strptime(appt_time_obj, '%H:%M:%S').time()
+                                            time_str = parsed_time.strftime('%H:%M')
+                                          except ValueError:
+                                            try: # Thử định dạng khác nếu cần
+                                                 parsed_time = datetime.strptime(appt_time_obj, '%H:%M').time()
+                                                 time_str = parsed_time.strftime('%H:%M')
+                                            except ValueError:
+                                                 print(f"Warning: Could not parse time string '{appt_time_obj}'")
+                                                 time_str = "Invalid Str" # Hoặc giữ N/A
+                                     else:
+                                      # Ghi log nếu gặp kiểu dữ liệu không mong muốn khác
+                                        print(f"Warning: Unexpected type for AppointmentTime: {type(appt_time_obj)}")
+                                        time_str = "Unknown Type"
+
+                                  patient_name = appt.get("PatientName", "N/A")
+                                  status = appt.get("Status", "N/A")
+
+                                  tree_widget.insert("", "end", values=(time_str, patient_name, status))
+                          else:
+                              tree_widget.insert("", "end", values=("", "No scheduled appointments today", ""))
+                     else:
+                          print(f"Lỗi khi tải lịch hẹn: {appts_data}")
+                          tree_widget.insert("", "end", values=("Error", "Could not load appointments", str(appts_data)))
+
+                 except NameError:
+                      print("Warning: Hàm 'search_appointments' không tồn tại trong core_logic (hiển thị thông báo).")
+                      tree_widget.insert("", "end", values=("N/A", "Function missing", "Error"))
+                 except Exception as e:
+                      print(f"Lỗi không mong đợi khi làm mới lịch hẹn: {e}")
+                      import traceback
+                      traceback.print_exc()
+                      tree_widget.insert("", "end", values=("Error", "Unexpected error", str(e)))
+
+
+            # Header của mục lịch hẹn
+            appointments_header = tk.Frame(appointments_container, bg=light_color)
+            appointments_header.pack(fill="x", pady=(10, 5))
+
+            tk.Label(appointments_header, text="UPCOMING APPOINTMENTS",
+                     font=(small_font[0], 10, "bold"), bg=light_color, fg="#7f8c8d").pack(side="left")
+
+            # Nút làm mới bên cạnh header
+            # Đảm bảo command gọi đúng hàm refresh với widget tree làm đối số
+            refresh_btn = tk.Button(appointments_header, text="🔄 Refresh",
+                                    # command=lambda: refresh_appointments_view(appointments_tree), # Gán command sau khi appointments_tree được tạo
+                                     font=(small_font[0], 9), fg=accent_color, bg=light_color, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color)
+            refresh_btn.pack(side="right", padx=5)
+
+
+            # Tạo Treeview cho lịch hẹn
+            appt_columns = ["Time", "Patient", "Status"]
+            appt_style = ttk.Style()
+            # Cấu hình style cho heading và rows
+            appt_style.configure("Appointments.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+            appt_style.configure("Appointments.Treeview", font=small_font, rowheight=28) # Tăng chiều cao dòng
+            # Tạo widget Treeview sau khi style được cấu hình
+            appointments_tree = ttk.Treeview(appointments_container, columns=appt_columns, show="headings", height=8, style="Appointments.Treeview") 
+
+            # Cấu hình cột sau khi tạo Treeview
+            for col in appt_columns:
+                anchor = tk.W if col != "Time" else tk.CENTER
+                width = 120 if col == "Time" else (280 if col == "Patient" else 100) # Điều chỉnh chiều rộng cột
+                appointments_tree.heading(col, text=col, anchor=anchor)
+                appointments_tree.column(col, width=width, anchor=anchor, stretch=True)
+
+            # Gán lệnh cho nút Refresh SAU KHI appointments_tree được tạo
+            refresh_btn.config(command=lambda: refresh_appointments_view(appointments_tree))
+
+            # Thanh cuộn cho Treeview lịch hẹn
+            appt_scrollbar = ttk.Scrollbar(appointments_container, orient="vertical", command=appointments_tree.yview)
+            appointments_tree.configure(yscrollcommand=appt_scrollbar.set)
+
+            # Đặt Treeview và Scrollbar vào grid hoặc pack để dễ quản lý hơn
+            # Sử dụng pack cho đơn giản trong trường hợp này
+            appointments_tree_frame = tk.Frame(appointments_container) # Frame chứa tree và scrollbar
+            appointments_tree_frame.pack(fill="both", expand=True)
+            appt_scrollbar.pack(side="right", fill="y") # Đặt scrollbar trước
+            appointments_tree.pack(side="left", fill="both", expand=True) # Treeview lấp đầy phần còn lại
+
+
+            # Tải dữ liệu lịch hẹn ban đầu
+            refresh_appointments_view(appointments_tree)
+
+        except Exception as e:
+            clear_content() # Xóa nếu có lỗi nghiêm trọng khi vẽ dashboard
+            messagebox.showerror("Dashboard Error", f"Failed to display dashboard: {e}", parent=doctor_window)
+            print(f"Lỗi nghiêm trọng khi hiển thị dashboard bác sĩ: {e}")
+            import traceback
+            traceback.print_exc() # In traceback để debug
+
+    # --- Định Nghĩa Các Mục Menu và Lệnh ---
+    # Sử dụng lambda để đảm bảo các đối số được truyền đúng cách tại thời điểm gọi
+    menu_actions = {
+        "Dashboard": ("📊", show_dashboard_content),
+        "Order Admission": ("➡️🏥", lambda: order_admission_gui(conn, doctor_id)), # <<< ADDED THIS
+        "View Patients": ("👥", lambda: view_patient_gui(conn)),
+        "View Appointments": ("📅", lambda: view_appointments_gui(conn, 'doctor', doctor_id)), # Pass doctor_id
+        "Update Appt Status": ("🔄", lambda: update_appointment_status_gui(conn)), # Abbreviated
+        "View Prescriptions": ("📄", lambda: view_prescriptions_gui(conn)),
+        "Create Prescription": ("➕", lambda: create_prescription_gui(conn, doctor_id)),
+        "Delete Prescription Item": ("❌", lambda: delete_prescription_details_gui(conn)),
+        "View Emergency Contacts": ("🆘", lambda: view_emergency_contacts_gui(conn)),
+        "View Services": ("⚕️", lambda: view_services_gui(conn)),
+        "View Medicines": ("💊", lambda: view_medicine_gui(conn)),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "View Rooms": ("🚪", lambda: view_rooms_gui(conn)),
+        "Change Password": ("⚙️", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: logout_action(doctor_window))
+    }
+
+    # --- Tạo Các Nút Menu ---
+    # Gắn sự kiện cuộn chuột cho frame chứa nút để hoạt động tốt hơn
+    menu_buttons_frame.bind("<MouseWheel>", _on_mousewheel_menu)
+    menu_buttons_frame.bind("<Button-4>", _on_mousewheel_menu)
+    menu_buttons_frame.bind("<Button-5>", _on_mousewheel_menu)
+
+    for text, (icon, command) in menu_actions.items():
+        btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                        font=normal_font, fg=menu_fg, bg=menu_bg,
+                        bd=0, relief="flat", padx=15, pady=12,
+                        activebackground=menu_hover_bg, activeforeground=menu_fg,
+                        command=command)
+        btn.pack(fill="x", pady=1, padx=5) # Thêm padding ngang
+
+        # Hiệu ứng Hover (giữ nguyên)
+        btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+        btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+        # Gắn sự kiện cuộn chuột cho từng nút (quan trọng để cuộn khi chuột trên nút)
+        btn.bind("<MouseWheel>", _on_mousewheel_menu)
+        btn.bind("<Button-4>", _on_mousewheel_menu)
+        btn.bind("<Button-5>", _on_mousewheel_menu)
+
+    # --- Footer trong Menu ---
+    tk.Label(menu_frame, text="Hospital Management System © 2025", # Thêm năm
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    # Hiển thị dashboard mặc định sau khi cửa sổ đã sẵn sàng
+    doctor_window.after(100, show_dashboard_content)
+
+    # Đảm bảo cửa sổ được căn giữa sau khi các widget được tạo
+    # Gọi center_window() ở đây nếu hàm đó tồn tại
+    try:
+        center_window(doctor_window) # Giả sử hàm center_window tồn tại
+    except NameError:
+        print("Warning: center_window function not found.")
+        # Fallback: Tự căn giữa cơ bản
+        doctor_window.update_idletasks()
+        width = doctor_window.winfo_width()
+        height = doctor_window.winfo_height()
+        x = (doctor_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (doctor_window.winfo_screenheight() // 2) - (height // 2)
+        doctor_window.geometry(f'{width}x{height}+{x}+{y}')
+
+
+    doctor_window.mainloop()
 def open_receptionist_menu(conn, username):
+    """Mở cửa sổ Bảng điều khiển Receptionist với giao diện hiện đại và đầy đủ chức năng."""
     receptionist_window = tk.Tk()
-    receptionist_window.title(f"Receptionist Menu - {username}")
-    receptionist_window.geometry("800x600")
-    receptionist_window.config(bg=BG_COLOR)
-    center_window(receptionist_window)
-    
-    # Main frame
-    main_frame = tk.Frame(receptionist_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Receptionist Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
-    
-    # Button frame
-    button_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    button_frame.pack(fill=tk.X)
-    
-    # Create buttons in two columns
-    buttons = [
-        ("Add Patient", lambda: add_patient_gui(conn)),
-        ("Delete Patient", lambda: delete_patient_gui(conn)),
-        ("Update Patient Info", lambda: update_patient_info_gui(conn)),
-        ("View Patient", lambda: view_patient_gui(conn)),
-        ("Add Emergency Contact", lambda: add_emergency_contact_gui(conn)),
-        ("Update Emergency Contact", lambda: update_emergency_contact_gui(conn)),
-        ("Delete Emergency Contact", lambda: delete_emergency_contact_gui(conn)),
-        ("Schedule Appointment", lambda: schedule_appointment_gui(conn)),
-        ("View Appointments", lambda: view_appointments_gui(conn, 'receptionist')),
-        ("View Rooms", lambda: view_rooms_gui(conn)),
-        ("Assign Room", lambda: assign_room_gui(conn)),
-        ("View Departments", lambda: view_departments_gui(conn)),
-        ("View Insurance", lambda: view_insurance_gui(conn)),
-        ("Create Insurance", lambda: add_insurance_gui(conn)),
-        ("View Services", lambda: view_services_gui(conn)),
-        ("View Doctors", lambda: view_doctor_gui(conn)),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", receptionist_menu.destroy)
-    ]
-    
-    # Organize buttons in two columns
-    for i, (text, command) in enumerate(buttons):
-        row = i // 2
-        col = i % 2
-        btn = tk.Button(
-            button_frame,
-            text=text,
-            command=command,
-            width=25
-        )
-        apply_styles(btn)
-        btn.grid(row=row, column=col, padx=10, pady=5, sticky="ew")
-    
-    # Configure grid weights
-    button_frame.grid_columnconfigure(0, weight=1)
-    button_frame.grid_columnconfigure(1, weight=1)
-    
+    receptionist_window.title(f"Receptionist Dashboard - {username}")
+    receptionist_window.geometry("1200x700")
+    receptionist_window.minsize(1000, 600)
+    receptionist_window.configure(bg="#ffffff")
+
+    # Bảng màu hiện đại (Keep your color definitions)
+    primary_color = "#4a6fa5"
+    secondary_color = "#6bbd99"
+    accent_color = "#5d9cec"
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#2c3e50"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#34495e"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
+
+    # Font settings (Keep your font definitions)
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
+
+    # --- Khung Menu Bên Trái ---
+    # (Keep menu_frame, menu_header_frame, avatar_canvas, labels)
+    menu_frame = tk.Frame(receptionist_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'R',
+                             font=(title_font[0], 24, "bold"), fill="white")
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Receptionist", font=small_font,
+             fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+
+    # --- Các Mục Menu với thanh cuộn ---
+    # (Keep menu_canvas, scrollbar, menu_buttons_frame, and scrolling logic)
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+
+    # --- Khu Vực Nội Dung Chính ---
+    # (Keep content_frame, header_frame, user_frame, stats_frame, create_stat_card)
+    content_frame = tk.Frame(receptionist_window, bg=light_color)
+    content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+    header_frame = tk.Frame(content_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x"); header_frame.pack_propagate(False)
+    tk.Label(header_frame, text="Receptionist Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Receptionist", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+    stats_frame = tk.Frame(content_frame, bg=light_color); stats_frame.pack(fill=tk.X, pady=(10, 20))
+    def get_receptionist_stats(db_conn): return {"today_appointments": "N/A", "pending_admissions": "N/A", "available_rooms": "N/A"} # Placeholder
+    stats_data = get_receptionist_stats(conn)
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1, highlightbackground=card_border, padx=15, pady=15)
+        header = tk.Frame(card, bg=card_bg); header.pack(fill="x", pady=(0, 10))
+        if icon: tk.Label(header, text=icon, font=(normal_font[0], 16), bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(side="left")
+        tk.Label(card, text=str(value), font=card_font, bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        return card
+    stat_cards_info = [("Today's Appointments", stats_data.get("today_appointments", "N/A"), accent_color, "📅"), ("Pending Admissions", stats_data.get("pending_admissions", "N/A"), secondary_color, "📋"), ("Available Rooms", stats_data.get("available_rooms", "N/A"), primary_color, "🏥")]
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon); card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew"); stats_frame.grid_columnconfigure(i, weight=1)
+
+
+    # --- Danh sách hẹn hôm nay (Sử dụng dữ liệu thật) ---
+    # (Keep the today_frame, treeview, scrollbar, and refresh function setup)
+    today_frame = tk.Frame(content_frame, bg=card_bg, bd=0, relief="flat", highlightbackground=card_border, highlightthickness=1)
+    today_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
+    list_header = tk.Frame(today_frame, bg=card_bg); list_header.pack(fill=tk.X, pady=(10, 5), padx=15)
+    tk.Label(list_header, text="TODAY'S APPOINTMENTS", font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(side="left")
+    tree_container = tk.Frame(today_frame, bg=card_bg); tree_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+    columns = ("Time", "Patient", "Doctor", "Status"); tree_style = ttk.Style()
+    tree_style.configure("Receptionist.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Receptionist.Treeview", font=small_font, rowheight=28)
+    tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=10, style="Receptionist.Treeview")
+    for col in columns: # Keep column setup
+        anchor = tk.CENTER if col == "Time" else tk.W; width = 100 if col == "Time" else (150 if col == "Status" else 200)
+        tree.heading(col, text=col, anchor=anchor); tree.column(col, width=width, anchor=anchor, stretch=(col != "Time"))
+    scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y"); tree.pack(side="left", fill=tk.BOTH, expand=True)
+    tree.tag_configure('Confirmed', background='#e8f5e9'); tree.tag_configure('Pending', background='#fff9c4')
+    tree.tag_configure('Cancelled', background='#ffebee'); tree.tag_configure('Scheduled', background='#e3f2fd')
+
+    def refresh_today_appointments(): # Keep the refresh function definition
+        if not tree.winfo_exists(): return
+        try:
+            for item in tree.get_children(): tree.delete(item)
+        except tk.TclError: return
+        try:
+            today = datetime.now()
+            success, appointments = search_appointments(conn, role='receptionist', username=username, year=today.year, month=today.month, day=today.day, status=None)
+            if success:
+                if appointments:
+                    for appt in appointments:
+                        appt_time_obj = appt.get("AppointmentTime"); time_str = "N/A"
+                        if appt_time_obj is not None: # Keep time formatting
+                             if isinstance(appt_time_obj, time): time_str = appt_time_obj.strftime('%H:%M')
+                             elif isinstance(appt_time_obj, datetime): time_str = appt_time_obj.strftime('%H:%M')
+                             elif isinstance(appt_time_obj, timedelta): total_seconds = int(appt_time_obj.total_seconds()); hours, rem = divmod(total_seconds, 3600); minutes, _ = divmod(rem, 60); time_str = f"{hours:02}:{minutes:02}"
+                             elif isinstance(appt_time_obj, str):
+                                 try: time_str = datetime.strptime(appt_time_obj, '%H:%M:%S').strftime('%H:%M')
+                                 except ValueError:
+                                     try: time_str = datetime.strptime(appt_time_obj, '%H:%M').strftime('%H:%M')
+                                     except ValueError: time_str = appt_time_obj
+                             else: time_str = str(appt_time_obj)
+                        patient_name = appt.get("PatientName", "N/A"); doctor_name = appt.get("DoctorName", "N/A"); status = appt.get("Status", "N/A")
+                        tree.insert("", tk.END, values=(time_str, patient_name, doctor_name, status), tags=(status,))
+                else: tree.insert("", tk.END, values=("", "No appointments scheduled for today", "", ""))
+            else: messagebox.showerror("Load Error", f"Could not load appointments: {appointments}", parent=receptionist_window)
+        except NameError: messagebox.showerror("Code Error", "Function 'search_appointments' not found.", parent=receptionist_window)
+        except Exception as e: messagebox.showerror("Unexpected Error", f"Error: {str(e)}", parent=receptionist_window); import traceback; traceback.print_exc()
+
+    refresh_btn = tk.Button(list_header, text="🔄 Refresh", font=(small_font[0], 9), fg=accent_color, bg=card_bg, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color, command=refresh_today_appointments)
+    refresh_btn.pack(side="right", padx=5)
+    receptionist_window.after(100, refresh_today_appointments)
+
+
+    # --- Các nút chức năng chính (Updated with user's list + Create Invoice) ---
+    menu_actions = {
+        # Patient Management
+        "Add Patient": ("➕🧑", lambda: add_patient_gui(conn)),
+        "View Patient": ("🔍🧑", lambda: view_patient_gui(conn)),
+        "Update Patient Info": ("✏️🧑", lambda: update_patient_info_gui(conn)),
+        "Delete Patient": ("❌🧑", lambda: delete_patient_gui(conn)),
+
+        # Emergency Contacts
+        "Add Emergency Contact": ("➕🆘", lambda: add_emergency_contact_gui(conn)),
+        "Update Emergency Contact": ("✏️🆘", lambda: update_emergency_contact_gui(conn)),
+        "Delete Emergency Contact": ("❌🆘", lambda: delete_emergency_contact_gui(conn)),
+
+        # Appointments
+        "Schedule Appointment": ("➕📅", lambda: schedule_appointment_gui(conn)),
+        "View Appointments": ("🔍📅", lambda: view_appointments_gui(conn, 'receptionist')),
+
+        # Admissions & Rooms
+        "Process Admission": ("➡️🏥", lambda: process_admission_gui(conn, username)),
+        "View Rooms": ("🔍🚪", lambda: view_rooms_gui(conn)),
+        "Assign Room": ("➡️🚪", lambda: assign_room_gui(conn)),
+
+        # Billing & Insurance
+        "Create Invoice": ("➕💰", lambda: create_invoice_gui(conn)), # <<< ADDED
+        "View Invoices": ("🔍💰", lambda: view_invoices_gui(conn)),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "Create Insurance": ("➕🛡️", lambda: add_insurance_gui(conn)),
+
+        # Other Lookups
+        "View Departments": ("🏢", lambda: view_departments_gui(conn)),
+        "View Services": ("⚕️", lambda: view_services_gui(conn)),
+        "View Doctors": ("🧑‍⚕️", lambda: view_doctor_gui(conn)),
+
+        # System
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: logout_action(receptionist_window))
+    }
+
+    # --- Generate Menu Buttons from the Dictionary ---
+    categories = {
+        "Patient": ["Add Patient", "View Patient", "Update Patient Info", "Delete Patient"],
+        "Emergency": ["Add Emergency Contact", "Update Emergency Contact", "Delete Emergency Contact"],
+        "Scheduling": ["Schedule Appointment", "View Appointments"],
+        "Admissions & Rooms": ["Process Admission", "Assign Room", "View Rooms"],
+        "Billing & Insurance": ["Create Invoice", "View Invoices", "Create Insurance", "View Insurance"], # <<< Added Create Invoice here
+        "Information": ["View Departments", "View Services", "View Doctors"],
+        "System": ["Change Password", "Logout"]
+    }
+
+    # (Keep the loop that creates buttons based on categories and menu_actions)
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy() # Clear existing
+    for category, items in categories.items():
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: sep_label.bind(event_type, _on_mousewheel_menu)
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w", font=normal_font, fg=menu_fg, bg=menu_bg, bd=0, padx=15, pady=10, relief="flat", activebackground=menu_hover_bg, activeforeground=menu_fg, command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg)); btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: btn.bind(event_type, _on_mousewheel_menu)
+
+
+    # Footer menu
+    tk.Label(menu_frame, text="Hospital System © 2025", fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    # Center and run
+    try: center_window(receptionist_window)
+    except NameError: print("Warning: center_window function not defined.")
     receptionist_window.mainloop()
 
 def open_accountant_menu(conn, username):
+    """Opens the Accountant Dashboard with modern UI similar to doctor/receptionist menus"""
     accountant_window = tk.Tk()
-    accountant_window.title(f"Accountant Menu - {username}")
-    accountant_window.geometry("500x300")
-    accountant_window.config(bg=BG_COLOR)
-    center_window(accountant_window)
-    accountant_window.lift()
-    accountant_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
-    accountant_window.after(100, lambda: accountant_window.attributes('-topmost', False))
+    accountant_window.title(f"Accountant Dashboard - {username}")
+    accountant_window.geometry("1200x700")
+    accountant_window.minsize(1000, 600)
+    accountant_window.configure(bg="#ffffff")  # White background
+
+    # Modern color scheme
+    primary_color = "#4a6fa5"  # Blue
+    secondary_color = "#6bbd99"  # Green
+    accent_color = "#5d9cec"  # Light blue
+    dark_color = "#333333"  # Dark text
+    light_color = "#f5f7fa"  # Light background
+    menu_bg = "#2c3e50"  # Dark menu background
+    menu_fg = "#ecf0f1"  # Light menu text
+    menu_hover_bg = "#34495e"  # Menu hover
+    menu_header_bg = "#1a252f"  # Darker menu header
+    card_bg = "white"  # Card background
+    card_border = "#e0e0e0"  # Card border
+
+    # Font settings
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
+
+    # --- Left Menu Frame ---
+    menu_frame = tk.Frame(accountant_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    # Menu header with user info
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar (circular)
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'A',
+                             font=(title_font[0], 24, "bold"), fill="white")
+
+    # User info
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Accountant", font=small_font,
+             fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+    # --- Scrollable Menu Items ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
     
-    # Main frame
-    main_frame = tk.Frame(accountant_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
     
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Accountant Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
     
-    # Buttons
-    buttons = [
-        ("View Invoices", lambda: view_invoices_gui(conn)),
-        ("Create Invoice", lambda: create_invoice_gui(conn)),
-        ("View Services", lambda: view_services_gui(conn)),
-        ("View Insurance", lambda: view_insurance_gui(conn)),
-        ("View Financial Report", lambda: generate_financial_report_gui(conn)),
-        ("Generate Statistics Report", lambda: generate_statistics_gui(conn)),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", lambda: logout_action(accountant_window))
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(accountant_window, bg=light_color)
+    dash_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    
+    tk.Label(header_frame, text="Accountant Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Accountant", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+
+    # --- Stats Cards ---
+    stats_frame = tk.Frame(dash_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    def get_accountant_stats(db_conn):
+        stats_data = {"partial_invoices": "N/A", "total_revenue": "N/A", "unpaid_invoices": "N/A"}
+        if not db_conn: return stats_data
+        try:
+            with db_conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM Invoices WHERE PaymentStatus = 'Partial'")
+                result = cursor.fetchone()
+                stats_data["partial_invoices"] = str(result['count']) if result else "0"
+                
+                cursor.execute("SELECT SUM(TotalAmount) as total FROM Invoices WHERE PaymentStatus = 'Paid' AND MONTH(InvoiceDate) = MONTH(CURRENT_DATE())")
+                result = cursor.fetchone()
+                stats_data["total_revenue"] = f"{result['total']:,.0f} VND" if result and result['total'] else "0 VND"
+                
+                cursor.execute("SELECT COUNT(*) as count FROM Invoices WHERE PaymentStatus = 'Unpaid'")
+                result = cursor.fetchone()
+                stats_data["unpaid_invoices"] = str(result['count']) if result else "0"
+        except Exception as e: 
+            print(f"Database error fetching accountant stats: {e}")
+        return stats_data
+
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                       highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
+        return card
+
+    stats_data = get_accountant_stats(conn)
+    
+    stat_cards_info = [
+        ("Partial Invoices", stats_data.get("partial_invoices", "N/A"), accent_color, "📋"),
+        ("Monthly Revenue", stats_data.get("total_revenue", "N/A"), secondary_color, "💰"),
+        ("Unpaid Invoices", stats_data.get("unpaid_invoices", "N/A"), primary_color, "⚠️")
     ]
+
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
+
+    # --- Recent Invoices Table ---
+    invoices_frame = tk.Frame(dash_frame, bg=card_bg, bd=0, relief="flat",
+                            highlightbackground=card_border, highlightthickness=1)
+    invoices_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+    # Header
+    invoices_header = tk.Frame(invoices_frame, bg=card_bg)
+    invoices_header.pack(fill="x", pady=(10, 5), padx=15)
     
-    for text, command in buttons:
-        btn = tk.Button(
-            main_frame,
-            text=text,
-            command=command,
-            width=30
-        )
-        apply_styles(btn)
-        btn.pack(pady=5, fill=tk.X)
+    tk.Label(invoices_header, text="RECENT INVOICES", font=(small_font[0], 10, "bold"),
+             bg=card_bg, fg="#7f8c8d").pack(side="left")
+
+    # Treeview for invoices
+    columns = ("InvoiceID", "Patient", "InvoiceDate", "TotalAmount", "Status")
+    tree_style = ttk.Style()
+    tree_style.configure("Accountant.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Accountant.Treeview", font=small_font, rowheight=28)
     
+    tree = ttk.Treeview(invoices_frame, columns=columns, show="headings", height=8, style="Accountant.Treeview")
+    
+    # Configure columns
+    col_widths = [80, 200, 100, 100, 100]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["InvoiceID", "TotalAmount"] else tk.W)
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(invoices_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    # Pack tree and scrollbar
+    tree.pack(side="left", fill="both", expand=True, padx=15, pady=(0, 15))
+    scrollbar.pack(side="right", fill="y")
+
+    # Tag configurations for status
+    tree.tag_configure('Paid', background='#e8f5e9')
+    tree.tag_configure('Partial', background='#fff3e0')
+    tree.tag_configure('Unpaid', background='#ffebee')
+
+    def load_recent_invoices():
+        tree.delete(*tree.get_children())
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT i.InvoiceID, p.PatientName, i.InvoiceDate, 
+                           i.TotalAmount, i.PaymentStatus
+                    FROM Invoices i
+                    JOIN Patients p ON i.PatientID = p.PatientID
+                    ORDER BY i.InvoiceDate DESC
+                    LIMIT 15
+                """)
+                invoices = cursor.fetchall()
+                
+                if invoices:
+                    for inv in invoices:
+                        tree.insert("", tk.END, values=(
+                            inv['InvoiceID'],
+                            inv['PatientName'],
+                            inv['InvoiceDate'].strftime('%Y-%m-%d') if inv['InvoiceDate'] else "",
+                            f"{inv['TotalAmount']:,.0f} VND",
+                            inv['PaymentStatus']
+                        ), tags=(inv['PaymentStatus'],))
+                else:
+                    tree.insert("", tk.END, values=("", "No invoices found", "", "", ""))
+        except Exception as e:
+            print(f"Error loading invoices: {e}")
+            tree.insert("", tk.END, values=("Error", "Could not load data", "", "", ""))
+
+    # Load initial data
+    load_recent_invoices()
+
+    # --- Menu Items ---
+    menu_actions = {
+        "Dashboard": ("📊", lambda: load_recent_invoices()),
+        "View Invoices": ("📋", lambda: view_invoices_gui(conn)),
+        "Create Invoice": ("➕", lambda: create_invoice_gui(conn)),
+        "View Services": ("⚕️", lambda: view_services_gui(conn)),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "Financial Report": ("📈", lambda: generate_financial_report_gui(conn)),
+        "Statistics Report": ("📊", lambda: generate_statistics_gui(conn)),
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: logout_action(accountant_window))
+    }
+
+    # Organize menu items into categories
+    categories = {
+        "Billing": ["View Invoices", "Create Invoice"],
+        "Reports": ["Financial Report", "Statistics Report"],
+        "Information": ["View Services", "View Insurance"],
+        "System": ["Change Password", "Logout"]
+    }
+
+    # Create menu buttons
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()  # Clear existing
+    
+    for category, items in categories.items():
+        # Category separator
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", 
+                            font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        
+        # Bind scroll events to separator
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+            sep_label.bind(event_type, _on_mousewheel_menu)
+        
+        # Menu items
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                
+                # Hover effects
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                
+                # Bind scroll events
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+                    btn.bind(event_type, _on_mousewheel_menu)
+
+    # Footer
+    tk.Label(menu_frame, text="Hospital System © 2025", 
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    # Center window
+    try:
+        center_window(accountant_window)
+    except NameError:
+        accountant_window.update_idletasks()
+        width = accountant_window.winfo_width()
+        height = accountant_window.winfo_height()
+        x = (accountant_window.winfo_screenwidth() // 2) - (width // 2)
+        y = (accountant_window.winfo_screenheight() // 2) - (height // 2)
+        accountant_window.geometry(f'{width}x{height}+{x}+{y}')
+
     accountant_window.mainloop()
 
-    def open_nurse_menu(conn, username):
-        nurse_window = tk.Tk()
-        nurse_window.title(f"Nurse Menu - {username}")
-        nurse_window.geometry("700x500")
-        nurse_window.config(bg=BG_COLOR)
-        center_window(nurse_window)
-        
-        # Main frame
-        main_frame = tk.Frame(nurse_window, bg=BG_COLOR)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        
-        # Title
-        title_label = tk.Label(
-            main_frame,
-            text="Nurse Dashboard",
-            font=TITLE_FONT,
-            bg=BG_COLOR,
-            fg=ACCENT_COLOR
-        )
-        title_label.pack(pady=(0, 20))
-        
-        # Buttons
-        buttons = [
-            ("View Patient", lambda: view_patient_gui(conn)),
-            ("View Emergency Contacts", lambda: view_emergency_contacts_gui(conn)),
-            ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
-            ("View Medicines", lambda: view_medicine_gui(conn)),
-            ("View Rooms", lambda: view_rooms_gui(conn)),
-            ("View Appointments", lambda: view_appointments_gui(conn, 'nurse')),
-            ("View Insurance", lambda: view_insurance_gui(conn)),
-            ("View Services", lambda: view_services_gui(conn)),
-            ("View Departments", lambda: view_departments_gui(conn)),
-            ("Change Password", lambda: change_password_gui(conn, username)),
-            ("Logout", nurse_window.destroy)
-        ]
-        
-        for text, command in buttons:
-            btn = tk.Button(
-                main_frame,
-                text=text,
-                command=command,
-                width=30
-            )
-            apply_styles(btn)
-            btn.pack(pady=5, fill=tk.X)
-        
-        nurse_window.mainloop()
+def open_nurse_menu(conn, username):
+    """Opens the Nurse Dashboard with modern UI"""
+    nurse_window = tk.Tk()
+    nurse_window.title(f"Nurse Dashboard - {username}")
+    nurse_window.geometry("1200x700")
+    nurse_window.minsize(1000, 600)
+    nurse_window.configure(bg="#ffffff")
 
-def open_pharmacist_menu(conn, username):
-    pharmacist_window = tk.Tk()
-    pharmacist_window.title(f"Pharmacist Menu - {username}")
-    pharmacist_window.geometry("700x500")
-    pharmacist_window.config(bg=BG_COLOR)
-    center_window(pharmacist_window)
+    # Modern color scheme
+    primary_color = "#3498db"  # Blue
+    secondary_color = "#e74c3c"  # Red
+    accent_color = "#f39c12"  # Orange
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#2c3e50"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#34495e"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
 
-    # Main frame
-    main_frame = tk.Frame(pharmacist_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    # Font settings
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
 
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Pharmacist Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
+    # --- Left Menu Frame ---
+    menu_frame = tk.Frame(nurse_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
 
-    # Buttons
-    buttons = [
-        ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
-        ("View Medicines", lambda: view_medicine_gui(conn)),
-        ("View Medicine Batch", lambda: view_medicine_batches_gui(conn)),
-        ("Adjust Medicine Stock", lambda: adjust_medicine_batch_gui(conn)),
-        ("View Inventory", lambda: view_inventory_gui(conn)),
-        ("Adjust Inventory", lambda: adjust_inventory_gui(conn)),
-        ("View Patient Services", lambda: view_patient_services_gui(conn)),
-        ("View Insurance", lambda: view_insurance_gui(conn)),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", pharmacist_window.destroy)
+    # Menu header with user info
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'N',
+                             font=(title_font[0], 24, "bold"), fill="white")
+
+    # User info
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Nurse", font=small_font,
+             fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+    # --- Scrollable Menu Items ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(nurse_window, bg=light_color)
+    dash_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    
+    tk.Label(header_frame, text="Nurse Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Nurse", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+
+    # --- Stats Cards ---
+    stats_frame = tk.Frame(dash_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    def get_nurse_stats(db_conn):
+        stats_data = {"active_patients": "N/A", "pending_tasks": "N/A", "available_rooms": "N/A"}
+        if not db_conn: return stats_data
+        try:
+            with db_conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) as count FROM Patients WHERE Status = 'Active'")
+                result = cursor.fetchone()
+                stats_data["active_patients"] = str(result['count']) if result else "0"
+                
+                cursor.execute("SELECT COUNT(*) as count FROM Appointments WHERE Status = 'Scheduled'")
+                result = cursor.fetchone()
+                stats_data["scheduled_tasks"] = str(result['count']) if result else "0"
+                
+                cursor.execute("SELECT COUNT(*) as count FROM Rooms WHERE Status = 'Available'")
+                result = cursor.fetchone()
+                stats_data["available_rooms"] = str(result['count']) if result else "0"
+        except Exception as e: 
+            print(f"Database error fetching nurse stats: {e}")
+        return stats_data
+
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                       highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
+        return card
+
+    stats_data = get_nurse_stats(conn)
+    
+    stat_cards_info = [
+        ("Active Patients", stats_data.get("active_patients", "N/A"), primary_color, "👩‍⚕️"),
+        ("Scheduled Tasks", stats_data.get("scheduled_tasks", "N/A"), accent_color, "📝"),
+        ("Available Rooms", stats_data.get("available_rooms", "N/A"), secondary_color, "🏥")
     ]
 
-    for text, command in buttons:
-        btn = tk.Button(
-            main_frame,
-            text=text,
-            command=command,
-            width=30
-        )
-        apply_styles(btn)
-        btn.pack(pady=5, fill=tk.X)
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
+
+    # --- Recent Patients Table ---
+    patients_frame = tk.Frame(dash_frame, bg=card_bg, bd=0, relief="flat",
+                            highlightbackground=card_border, highlightthickness=1)
+    patients_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+    # Header
+    patients_header = tk.Frame(patients_frame, bg=card_bg)
+    patients_header.pack(fill="x", pady=(10, 5), padx=15)
+    
+    tk.Label(patients_header, text="RECENT PATIENTS", font=(small_font[0], 10, "bold"),
+             bg=card_bg, fg="#7f8c8d").pack(side="left")
+
+    # Treeview for patients
+    columns = ("PatientID", "Name", "Gender", "Status")
+    tree_style = ttk.Style()
+    tree_style.configure("Nurse.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Nurse.Treeview", font=small_font, rowheight=28)
+    
+    tree = ttk.Treeview(patients_frame, columns=columns, show="headings", height=8, style="Nurse.Treeview")
+    
+    # Configure columns
+    col_widths = [80, 200, 100, 100]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["PatientID", "Gender"] else tk.W)
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(patients_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    # Pack tree and scrollbar
+    tree.pack(side="left", fill="both", expand=True, padx=15, pady=(0, 15))
+    scrollbar.pack(side="right", fill="y")
+
+    def load_recent_patients():
+        tree.delete(*tree.get_children())
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT PatientID, PatientName, Gender, 
+       CASE 
+           WHEN Status = 'Active' THEN 'Active' 
+           ELSE '⚪ Inactive' 
+       END AS StatusLabel
+FROM Patients
+                """)
+                patients = cursor.fetchall()
+                
+                if patients:
+                    for p in patients:
+                        tree.insert("", tk.END, values=(
+                            p['PatientID'],
+                            p['PatientName'],
+                            p['Gender'],
+                            p['StatusLabel']
+                        ))
+                else:
+                    tree.insert("", tk.END, values=("", "No patients found", "", ""))
+        except Exception as e:
+            print(f"Error loading patients: {e}")
+            tree.insert("", tk.END, values=("Error", "Could not load data", "", ""))
+
+    # Load initial data
+    load_recent_patients()
+
+    # --- Menu Items ---
+    menu_actions = {
+        "Dashboard": ("📊", lambda: load_recent_patients()),
+        "View Patient": ("👨‍⚕️", lambda: view_patient_gui(conn)),
+        "View Emergency Contacts": ("🆘", lambda: view_emergency_contacts_gui(conn)),
+        "View Prescriptions": ("💊", lambda: view_prescriptions_gui(conn)),
+        "View Medicines": ("🧪", lambda: view_medicine_gui(conn)),
+        "View Rooms": ("🏨", lambda: view_rooms_gui(conn)),
+        "View Appointments": ("📅", lambda: view_appointments_gui(conn, 'nurse')),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "View Services": ("⚕️", lambda: view_services_gui(conn)),
+        "View Departments": ("🏛️", lambda: view_departments_gui(conn)),
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: nurse_window.destroy())
+    }
+
+    # Organize menu items into categories
+    categories = {
+        "Patient Care": ["View Patient", "View Emergency Contacts", "View Prescriptions"],
+        "Facility": ["View Rooms", "View Departments"],
+        "Information": ["View Medicines", "View Appointments", "View Insurance", "View Services"],
+        "System": ["Change Password", "Logout"]
+    }
+
+    # Create menu buttons
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()  # Clear existing
+    
+    for category, items in categories.items():
+        # Category separator
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", 
+                            font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        
+        # Bind scroll events to separator
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+            sep_label.bind(event_type, _on_mousewheel_menu)
+        
+        # Menu items
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                
+                # Hover effects
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                
+                # Bind scroll events
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+                    btn.bind(event_type, _on_mousewheel_menu)
+
+    # Footer
+    tk.Label(menu_frame, text="Hospital System © 2025", 
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    # Center window
+    center_window(nurse_window)
+
+    nurse_window.mainloop()
+
+def open_pharmacist_menu(conn, username):
+    """Opens the Pharmacist Dashboard with modern UI"""
+    pharmacist_window = tk.Tk()
+    pharmacist_window.title(f"Pharmacist Dashboard - {username}")
+    pharmacist_window.geometry("1200x700")
+    pharmacist_window.minsize(1000, 600)
+    pharmacist_window.configure(bg="#ffffff")
+
+    # Modern color scheme
+    primary_color = "#8e44ad"  # Purple
+    secondary_color = "#16a085"  # Teal
+    accent_color = "#d35400"  # Pumpkin
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#2c3e50"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#34495e"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
+
+    # Font settings
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
+
+    # --- Left Menu Frame ---
+    menu_frame = tk.Frame(pharmacist_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    # Menu header with user info
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'P',
+                             font=(title_font[0], 24, "bold"), fill="white")
+
+    # User info
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Pharmacist", font=small_font,
+             fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+    # --- Scrollable Menu Items ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(pharmacist_window, bg=light_color)
+    dash_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    
+    tk.Label(header_frame, text="Pharmacist Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Pharmacist", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+
+    # --- Stats Cards ---
+    stats_frame = tk.Frame(dash_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    def get_pharmacist_stats(db_conn):
+        stats_data = { "low_stock": "N/A", "total_medicines": "N/A"}
+        if not db_conn: return stats_data
+        try:
+            with db_conn.cursor() as cursor:
+                
+                cursor.execute("SELECT COUNT(*) as count FROM MedicineBatch WHERE Quantity < 10")
+                result = cursor.fetchone()
+                stats_data["low_stock"] = str(result['count']) if result else "0"
+                
+                cursor.execute("SELECT COUNT(DISTINCT MedicineID) as count FROM Medicine")
+                result = cursor.fetchone()
+                stats_data["total_medicines"] = str(result['count']) if result else "0"
+        except Exception as e: 
+            print(f"Database error fetching pharmacist stats: {e}")
+        return stats_data
+
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                       highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
+        return card
+
+    stats_data = get_pharmacist_stats(conn)
+    
+    stat_cards_info = [
+        ("Low Stock Medicines", stats_data.get("low_stock", "N/A"), accent_color, "⚠️"),
+        ("Total Medicines", stats_data.get("total_medicines", "N/A"), secondary_color, "🧪")
+    ]
+
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
+
+    # --- Recent Prescriptions Table ---
+    prescriptions_frame = tk.Frame(dash_frame, bg=card_bg, bd=0, relief="flat",
+                            highlightbackground=card_border, highlightthickness=1)
+    prescriptions_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+    # Header
+    prescriptions_header = tk.Frame(prescriptions_frame, bg=card_bg)
+    prescriptions_header.pack(fill="x", pady=(10, 5), padx=15)
+    
+    tk.Label(prescriptions_header, text="RECENT PRESCRIPTIONS", font=(small_font[0], 10, "bold"),
+             bg=card_bg, fg="#7f8c8d").pack(side="left")
+
+    # Treeview for prescriptions
+    columns = ("PrescriptionID", "Patient", "Doctor", "Date")
+    tree_style = ttk.Style()
+    tree_style.configure("Pharmacist.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Pharmacist.Treeview", font=small_font, rowheight=28)
+    
+    tree = ttk.Treeview(prescriptions_frame, columns=columns, show="headings", height=8, style="Pharmacist.Treeview")
+    
+    # Configure columns
+    col_widths = [100, 180, 150, 100]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["PrescriptionID"] else tk.W)
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(prescriptions_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    # Pack tree and scrollbar
+    tree.pack(side="left", fill="both", expand=True, padx=15, pady=(0, 15))
+    scrollbar.pack(side="right", fill="y")
+
+    def load_recent_prescriptions():
+        tree.delete(*tree.get_children())
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT p.PrescriptionID, pt.PatientName, d.DoctorName, 
+                           p.PrescriptionDate
+                    FROM Prescription p
+                    JOIN Patients pt ON p.PatientID = pt.PatientID
+                    JOIN Doctors d ON p.DoctorID = d.DoctorID
+                    ORDER BY p.PrescriptionDate DESC
+                    LIMIT 15
+                """)
+                prescriptions = cursor.fetchall()
+                
+                if prescriptions:
+                    for rx in prescriptions:
+                        tree.insert("", tk.END, values=(
+                            rx['PrescriptionID'],
+                            rx['PatientName'],
+                            rx['DoctorName'],
+                            rx['PrescriptionDate'].strftime('%Y-%m-%d') if rx['PrescriptionDate'] else ""
+                        ))
+                else:
+                    tree.insert("", tk.END, values=("", "No prescriptions found", "", "", ""))
+        except Exception as e:
+            print(f"Error loading prescriptions: {e}")
+            tree.insert("", tk.END, values=("Error", "Could not load data", "", "", ""))
+
+    # Load initial data
+    load_recent_prescriptions()
+
+    # --- Menu Items ---
+    menu_actions = {
+        "Dashboard": ("📊", lambda: load_recent_prescriptions()),
+        "View Prescriptions": ("💊", lambda: view_prescriptions_gui(conn)),
+        "View Medicines": ("🧪", lambda: view_medicine_gui(conn)),
+        "View Medicine Batch": ("📦", lambda: view_medicine_batches_gui(conn)),
+        "Adjust Medicine Stock": ("🔄", lambda: adjust_medicine_batch_gui(conn)),
+        "View Inventory": ("📋", lambda: view_inventory_gui(conn)),
+        "Adjust Inventory": ("✏️", lambda: adjust_inventory_gui(conn)),
+        "View Patient Services": ("⚕️", lambda: view_patient_services_gui(conn)),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: pharmacist_window.destroy())
+    }
+
+    # Organize menu items into categories
+    categories = {
+        "Prescriptions": ["View Prescriptions"],
+        "Medicines": ["View Medicines", "View Medicine Batch", "Adjust Medicine Stock"],
+        "Inventory": ["View Inventory", "Adjust Inventory"],
+        "Information": ["View Patient Services", "View Insurance"],
+        "System": ["Change Password", "Logout"]
+    }
+
+    # Create menu buttons
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()  # Clear existing
+    
+    for category, items in categories.items():
+        # Category separator
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", 
+                            font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        
+        # Bind scroll events to separator
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+            sep_label.bind(event_type, _on_mousewheel_menu)
+        
+        # Menu items
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                
+                # Hover effects
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                
+                # Bind scroll events
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+                    btn.bind(event_type, _on_mousewheel_menu)
+
+    # Footer
+    tk.Label(menu_frame, text="Hospital System © 2025", 
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    # Center window
+    center_window(pharmacist_window)
 
     pharmacist_window.mainloop()
 
 def open_director_menu(conn, username):
+    """Opens the Director Dashboard with modern UI"""
     director_window = tk.Tk()
-    director_window.title(f"Director Menu - {username}")
-    director_window.geometry("800x600")
-    director_window.config(bg=BG_COLOR)
-    center_window(director_window)
+    director_window.title(f"Director Dashboard - {username}")
+    director_window.geometry("1200x700")
+    director_window.minsize(1000, 600)
+    director_window.configure(bg="#ffffff")
 
-    # Main frame
-    main_frame = tk.Frame(director_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    # Modern color scheme for director
+    primary_color = "#2c3e50"   # Dark Blue
+    secondary_color = "#2980b9" # Blue
+    accent_color = "#27ae60"    # Green
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#34495e"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#2c3e50"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
 
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Director Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
+    # Font settings
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
 
-    # Buttons
-    buttons = [
-        ("View Doctors", lambda: view_doctor_gui(conn)),
-        ("View Patients", lambda: view_patient_gui(conn)),
-        ("View Departments", lambda: view_departments_gui(conn)),
-        ("View Financial Report", lambda: generate_financial_report_gui(conn)),
-        ("Room Report", lambda: get_room_statistics_gui(conn)),
-        ("Statistics Report", lambda: generate_statistics_gui(conn)),
-        ("View Insurance", lambda: view_insurance_gui(conn)),
-        ("View Invoices", lambda: view_invoices_gui(conn)),
-        ("View Appointments", lambda: view_appointments_gui(conn, 'director')),
-        ("View Services", lambda: view_services_gui(conn)),
-        ("View Inventory", lambda: view_inventory_gui(conn)),
-        ("View System Users", lambda: view_system_users_gui(conn) if 'view_system_users_gui' in globals() else None),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", director_window.destroy)
+    # --- Left Menu Frame ---
+    menu_frame = tk.Frame(director_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    # Menu header with user info
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=secondary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'D',
+                             font=(title_font[0], 24, "bold"), fill="white")
+
+    # User info
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Hospital Director", font=small_font,
+             fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+    # --- Scrollable Menu Items ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(director_window, bg=light_color)
+    dash_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    
+    tk.Label(header_frame, text="Director Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Director", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+
+    # --- Stats Cards ---
+    stats_frame = tk.Frame(dash_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                      highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
+        return card
+
+    def get_director_stats(db_conn):
+        stats_data = {
+            "total_doctors": "N/A",
+            "total_patients": "N/A",
+            "total_departments": "N/A",
+            "total_revenue": "N/A"
+        }
+        try:
+            with db_conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) AS count FROM Doctors")
+                stats_data["total_doctors"] = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT COUNT(*) AS count FROM Patients")
+                stats_data["total_patients"] = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT COUNT(*) AS count FROM Departments")
+                stats_data["total_departments"] = cursor.fetchone()['count']
+                
+                cursor.execute("SELECT SUM(TotalAmount) AS total FROM Invoices WHERE PaymentStatus = 'Paid'")
+                total = cursor.fetchone()['total'] or 0
+                stats_data["total_revenue"] = f"${total:,.2f}"
+                
+        except Exception as e:
+            print(f"Database error: {e}")
+        return stats_data
+
+    stats_data = get_director_stats(conn)
+    
+    stat_cards_info = [
+        ("Total Doctors", stats_data["total_doctors"], secondary_color, "👨⚕️"),
+        ("Total Patients", stats_data["total_patients"], accent_color, "👩⚕️"),
+        ("Departments", stats_data["total_departments"], primary_color, "🏥"),
+        ("Total Revenue", stats_data["total_revenue"], "#27ae60", "💰")
     ]
 
-    for text, command in buttons:
-        btn = tk.Button(
-            main_frame,
-            text=text,
-            command=command,
-            width=30
-        )
-        apply_styles(btn)
-        btn.pack(pady=5, fill=tk.X)
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
 
+    # --- Recent Financial Transactions Table ---
+    transactions_frame = tk.Frame(dash_frame, bg=card_bg, highlightthickness=1,
+                                highlightbackground=card_border)
+    transactions_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+    # Header
+    tk.Label(transactions_frame, text="RECENT FINANCIAL TRANSACTIONS", 
+            font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(pady=(10,5), padx=15, anchor="w")
+
+    # Treeview
+    columns = ("InvoiceID", "Patient", "Amount", "Date", "Status")
+    tree_style = ttk.Style()
+    tree_style.configure("Director.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Director.Treeview", font=small_font, rowheight=28)
+    
+    tree = ttk.Treeview(transactions_frame, columns=columns, show="headings", height=8, style="Director.Treeview")
+    
+    # Configure columns
+    col_widths = [80, 150, 100, 100, 80]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["Amount", "Status"] else tk.W)
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(transactions_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    tree.pack(side="left", fill="both", expand=True, padx=15, pady=(0, 15))
+    scrollbar.pack(side="right", fill="y")
+
+    def load_recent_transactions():
+        tree.delete(*tree.get_children())
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT i.InvoiceID, p.PatientName, i.TotalAmount, 
+                           i.InvoiceDate, i.PaymentStatus 
+                    FROM Invoices i
+                    JOIN Patients p ON i.PatientID = p.PatientID
+                    ORDER BY i.InvoiceDate DESC 
+                    LIMIT 15
+                """)
+                for invoice in cursor.fetchall():
+                    tree.insert("", tk.END, values=(
+                        invoice['InvoiceID'],
+                        invoice['PatientName'],
+                        f"${invoice['TotalAmount']:,.2f}",
+                        invoice['InvoiceDate'].strftime('%Y-%m-%d'),
+                        invoice['PaymentStatus']
+                    ))
+        except Exception as e:
+            print(f"Error loading transactions: {e}")
+
+    load_recent_transactions()
+
+    # --- Menu Items ---
+    menu_actions = {
+        "View Doctors": ("👨⚕️", lambda: view_doctor_gui(conn)),
+        "View Patients": ("👩⚕️", lambda: view_patient_gui(conn)),
+        "View Departments": ("🏥", lambda: view_departments_gui(conn)),
+        "Financial Report": ("📊", lambda: generate_financial_report_gui(conn)),
+        "Room Report": ("🏨", lambda: get_room_statistics_gui(conn)),
+        "Statistics Report": ("📈", lambda: generate_statistics_gui(conn)),
+        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
+        "View Invoices": ("🧾", lambda: view_invoices_gui(conn)),
+        "View Appointments": ("📅", lambda: view_appointments_gui(conn, 'director')),
+        "View Services": ("⚕️", lambda: view_services_gui(conn)),
+        "View Inventory": ("📦", lambda: view_inventory_gui(conn)),
+        "System Users": ("👥", lambda: view_system_users_gui(conn)),
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: director_window.destroy())
+    }
+
+    categories = {
+        "Management": ["View Doctors", "View Patients", "View Departments"],
+        "Reports": ["Financial Report", "Room Report", "Statistics Report"],
+        "Financial": ["View Invoices", "View Insurance"],
+        "Operations": ["View Appointments", "View Services", "View Inventory"],
+        "System": ["System Users", "Change Password", "Logout"]
+    }
+
+    # Create menu buttons
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()
+    
+    for category, items in categories.items():
+        # Category separator
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", 
+                            font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+            sep_label.bind(event_type, _on_mousewheel_menu)
+        
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+                    btn.bind(event_type, _on_mousewheel_menu)
+
+    # Footer
+    tk.Label(menu_frame, text="Hospital System © 2025", 
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    center_window(director_window)
     director_window.mainloop()
+def open_inventory_manager_menu(conn, username):
+    """Opens the Inventory Management Dashboard with modern UI"""
+    inv_window = tk.Tk()
+    inv_window.title(f"Inventory Manager - {username}")
+    inv_window.geometry("1200x700")
+    inv_window.minsize(1000, 600)
+    inv_window.configure(bg="#ffffff")
+
+    # Modern color scheme
+    primary_color = "#16a085"  # Teal
+    secondary_color = "#2980b9"  # Blue
+    accent_color = "#f39c12"  # Orange
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    menu_bg = "#2c3e50"
+    menu_fg = "#ecf0f1"
+    menu_hover_bg = "#34495e"
+    menu_header_bg = "#1a252f"
+    card_bg = "white"
+    card_border = "#e0e0e0"
+
+    # Font settings
+    try:
+        title_font = ("Segoe UI", 18, "bold")
+        header_font = ("Segoe UI", 14, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+        card_font = ("Segoe UI", 14, "bold")
+        tkFont.Font(family="Segoe UI", size=10)
+    except tk.TclError:
+        title_font = ("Arial", 18, "bold")
+        header_font = ("Arial", 14, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
+        card_font = ("Arial", 14, "bold")
+
+    # --- Left Menu Frame ---
+    menu_frame = tk.Frame(inv_window, bg=menu_bg, width=280)
+    menu_frame.pack(side="left", fill="y")
+    menu_frame.pack_propagate(False)
+
+    # Menu header with user info
+    menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
+    menu_header_frame.pack(fill="x")
+    menu_header_frame.pack_propagate(False)
+
+    # Avatar
+    avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
+    avatar_canvas.pack(pady=(25, 10))
+    avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
+    avatar_canvas.create_text(35, 35, text=username[0].upper(), 
+                            font=(title_font[0], 24, "bold"), fill="white")
+
+    # User info
+    tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
+            fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+    tk.Label(menu_header_frame, text="Inventory Manager", font=small_font,
+            fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
+
+    # --- Scrollable Menu Items ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+    
+    menu_scrollbar.pack(side="right", fill="y")
+    menu_canvas.pack(side="left", fill="both", expand=True)
+    
+    def update_scroll_region(event):
+        menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
+    
+    def _on_mousewheel_menu(event):
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+
+    # --- Main Dashboard Area ---
+    dash_frame = tk.Frame(inv_window, bg=light_color)
+    dash_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
+    # Header
+    header_frame = tk.Frame(dash_frame, bg=primary_color, height=80)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
+    
+    tk.Label(header_frame, text="Inventory Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+    
+    user_frame = tk.Frame(header_frame, bg=primary_color)
+    user_frame.pack(side="right", padx=20, pady=15)
+    tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
+    tk.Label(user_frame, text="Role: Inventory Manager", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
+
+    # --- Stats Cards ---
+    stats_frame = tk.Frame(dash_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    def get_inventory_stats(db_conn):
+        stats = {
+            "total_items": "N/A",
+            "low_stock": "N/A", 
+            "total_medicines": "N/A",
+            "expiring_soon": "N/A"
+        }
+        try:
+            with db_conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(distinct InventoryID) FROM Inventory")
+                stats["total_items"] = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(*) FROM Inventory WHERE Quantity < 5")
+                stats["low_stock"] = cursor.fetchone()[0]
+                
+                cursor.execute("SELECT COUNT(DISTINCT MedicineID) FROM Medicine")
+                stats["total_medicines"] = cursor.fetchone()[0]
+                
+                cursor.execute("""SELECT COUNT(*) FROM MedicineBatch 
+                               WHERE ExpiryDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)""")
+                stats["expiring_soon"] = cursor.fetchone()[0]
+        except Exception as e:
+            print(f"Database error: {e}")
+        return stats
+
+    def create_stat_card(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                      highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
+        return card
+
+    stats_data = get_inventory_stats(conn)
+    
+    stat_cards_info = [
+        ("Total Items", stats_data["total_items"], primary_color, "📦"),
+        ("Low Stock", stats_data["low_stock"], accent_color, "⚠️"),
+        ("Total Medicines", stats_data["total_medicines"], secondary_color, "💊"),
+        ("Expiring Soon", stats_data["expiring_soon"], "#e74c3c", "⏳")
+    ]
+
+    for i, (title, value, color, icon) in enumerate(stat_cards_info):
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
+
+    # --- Recent Adjustments Table ---
+    adjustments_frame = tk.Frame(dash_frame, bg=card_bg, highlightthickness=1,
+                               highlightbackground=card_border)
+    adjustments_frame.pack(fill="both", expand=True, pady=(0, 10))
+
+    # Header
+    tk.Label(adjustments_frame, text="RECENT STOCK ADJUSTMENTS", 
+            font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(pady=(10,5), padx=15, anchor="w")
+
+    # Treeview
+    columns = ("Date", "Type", "Item", "Quantity", "User")
+    tree_style = ttk.Style()
+    tree_style.configure("Inventory.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
+    tree_style.configure("Inventory.Treeview", font=small_font, rowheight=28)
+    
+    tree = ttk.Treeview(adjustments_frame, columns=columns, show="headings", height=8, style="Inventory.Treeview")
+    
+    # Configure columns
+    col_widths = [120, 100, 200, 80, 150]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["Quantity"] else tk.W)
+
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(adjustments_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+
+    tree.pack(side="left", fill="both", expand=True, padx=15, pady=(0, 15))
+    scrollbar.pack(side="right", fill="y")
+
+    def load_recent_adjustments():
+        tree.delete(*tree.get_children())
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT a.AdjustmentDate, a.AdjustmentType, 
+                           COALESCE(i.ItemName, m.MedicineName), 
+                           a.QuantityChanged, a.ChangedBy 
+                    FROM Adjustments a
+                    LEFT JOIN Inventory i ON a.InventoryID = i.InventoryID
+                    LEFT JOIN MedicineBatch mb ON a.BatchID = mb.BatchID
+                    LEFT JOIN Medicine m ON mb.MedicineID = m.MedicineID
+                    ORDER BY a.AdjustmentDate DESC 
+                    LIMIT 15
+                """)
+                for row in cursor.fetchall():
+                    tree.insert("", tk.END, values=(
+                        row[0].strftime('%Y-%m-%d'),
+                        row[1],
+                        row[2],
+                        row[3],
+                        row[4]
+                    ))
+        except Exception as e:
+            print(f"Error loading adjustments: {e}")
+
+    load_recent_adjustments()
+
+    # --- Menu Items ---
+    menu_actions = {
+        "Dashboard": ("📊", lambda: load_recent_adjustments()),
+        "View Inventory": ("📋", lambda: view_inventory_gui(conn)),
+        "Add Inventory Item": ("➕", lambda: add_inventory_gui(conn)),
+        "Update Inventory Item": ("✏️", lambda: update_inventory_gui(conn)),
+        "Disable Inventory Item": ("❌", lambda: disable_inventory_item_gui(conn)),
+        "Adjust Inventory": ("🔄", lambda: adjust_inventory_gui(conn)),
+        "View Medicines": ("💊", lambda: view_medicine_gui(conn)),
+        "Add Medicine": ("➕", lambda: add_medicine_gui(conn)),
+        "Update Medicine": ("✏️", lambda: update_medicine_gui(conn)),
+        "Delete Medicine": ("❌", lambda: delete_medicine_gui(conn)),
+        "View Medicine Batch": ("📦", lambda: view_medicine_batches_gui(conn)),
+        "Add Medicine Batch": ("➕", lambda: add_medicine_batch_gui(conn)),
+        "Update Medicine Batch": ("✏️", lambda: update_medicine_batch_gui(conn)),
+        "Delete Medicine Batch": ("❌", lambda: delete_medicine_batch_gui(conn)),
+        "Adjust Medicine Stock": ("🔄", lambda: adjust_medicine_batch_gui(conn)),
+        "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
+        "Logout": ("🚪", lambda: inv_window.destroy())
+    }
+
+    categories = {
+        "Inventory Management": ["View Inventory", "Add Inventory Item", "Update Inventory Item",
+                               "Disable Inventory Item", "Adjust Inventory"],
+        "Medicine Management": ["View Medicines", "Add Medicine", "Update Medicine",
+                              "Delete Medicine", "View Medicine Batch", "Add Medicine Batch",
+                              "Update Medicine Batch", "Delete Medicine Batch", "Adjust Medicine Stock"],
+        "System": ["Change Password", "Logout"]
+    }
+
+    # Create menu buttons
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()
+    
+    for category, items in categories.items():
+        # Category separator
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", 
+                            font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label.pack(fill="x", padx=10, pady=(8, 2))
+        
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+            sep_label.bind(event_type, _on_mousewheel_menu)
+        
+        for text in items:
+            if text in menu_actions:
+                icon, command = menu_actions[text]
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=command)
+                btn.pack(fill="x", pady=1, padx=5)
+                
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: 
+                    btn.bind(event_type, _on_mousewheel_menu)
+
+    # Footer
+    tk.Label(menu_frame, text="Hospital System © 2025", 
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+
+    center_window(inv_window)
+    inv_window.mainloop()
 
 def view_system_users_gui(conn):
-    """GUI for viewing system users"""
+
     view_window = tk.Toplevel()
     view_window.title("View System Users")
     view_window.geometry("800x500")
@@ -657,59 +2726,6 @@ def view_system_users_gui(conn):
     search_btn.grid(row=0, column=4, padx=10)
 
     view_window.after(100, search)
-
-def open_inventory_manager_menu(conn, username):
-    inventory_manager_window = tk.Tk()
-    inventory_manager_window.title(f"Inventory Manager Menu - {username}")
-    inventory_manager_window.geometry("800x600")
-    inventory_manager_window.config(bg=BG_COLOR)
-    center_window(inventory_manager_window)
-
-    # Main frame
-    main_frame = tk.Frame(inventory_manager_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-
-    # Title
-    title_label = tk.Label(
-        main_frame,
-        text="Inventory Manager Dashboard",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 20))
-
-    # Buttons
-    buttons = [
-        ("View Inventory", lambda: view_inventory_gui(conn)),
-        ("Add Inventory Item", lambda: add_inventory_gui(conn)),
-        ("Update Inventory Item", lambda: update_inventory_gui(conn)),
-        ("Disable Inventory Item", lambda: disable_inventory_item_gui(conn)),
-        ("Adjust Inventory", lambda: adjust_inventory_gui(conn)),
-        ("View Medicines", lambda: view_medicine_gui(conn)),
-        ("Add Medicine", lambda: add_medicine_gui(conn)),
-        ("Update Medicine", lambda: update_medicine_gui(conn)),
-        ("Delete Medicine", lambda: delete_medicine_gui(conn)),
-        ("View Medicine Batch", lambda: view_medicine_batches_gui(conn)),
-        ("Add Medicine Batch", lambda: add_medicine_batch_gui(conn)),
-        ("Update Medicine Batch", lambda: update_medicine_batch_gui(conn)),
-        ("Delete Medicine Batch", lambda: delete_medicine_batch_gui(conn)),
-        ("Adjust Medicine Stock", lambda: adjust_medicine_batch_gui(conn)),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", inventory_manager_window.destroy)
-    ]
-
-    for text, command in buttons:
-        btn = tk.Button(
-            main_frame,
-            text=text,
-            command=command,
-            width=30
-        )
-        apply_styles(btn)
-        btn.pack(pady=5, fill=tk.X)
-
-    inventory_manager_window.mainloop()
 
 # GUI Wrapper Functions for Core Logic
 def register_user_gui(conn):
@@ -1632,62 +3648,137 @@ def view_departments_gui(conn):
     fetch()
 # Appointment GUI Functions
 def schedule_appointment_gui(conn):
-    """GUI for scheduling appointments"""
+    """GUI for scheduling appointments with improved validation and auto-refresh"""
     appt_window = tk.Toplevel()
     appt_window.title("Schedule Appointment")
-    appt_window.geometry("400x350")
+    appt_window.geometry("500x400")  # Increased size for better layout
     appt_window.config(bg=BG_COLOR)
     center_window(appt_window)
-    appt_window.lift()
-    appt_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
-    appt_window.after(100, lambda: appt_window.attributes('-topmost', False))
+    
     # Main frame
     main_frame = tk.Frame(appt_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
     
-    # Form frame
+    # Title
+    title_label = tk.Label(
+        main_frame, 
+        text="Schedule New Appointment",
+        font=TITLE_FONT,
+        bg=BG_COLOR,
+        fg=ACCENT_COLOR
+    )
+    title_label.pack(pady=(0, 20))
+    
+    # Form frame with better organization
     form_frame = tk.Frame(main_frame, bg=BG_COLOR)
     form_frame.pack(fill=tk.X)
     
-    # Patient ID
-    tk.Label(form_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
+    # Current date and time for reference
+    now = datetime.now()
+    tk.Label(form_frame, 
+             text=f"Current Date/Time: {now.strftime('%Y-%m-%d %H:%M')}",
+             bg=BG_COLOR).grid(row=0, columnspan=2, pady=5)
+    
+    # Patient ID with validation
+    tk.Label(form_frame, text="Patient ID:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
     entry_patient = tk.Entry(form_frame)
-    entry_patient.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
+    entry_patient.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_patient)
     
-    # Doctor ID
-    tk.Label(form_frame, text="Doctor ID:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
+    # Button to search for patient
+    def search_patient():
+        patient_id = entry_patient.get()
+        if patient_id:
+            success, patient = search_patient(conn, patient_id=patient_id)
+            if success and patient:
+                messagebox.showinfo("Patient Found", 
+                                  f"Patient: {patient[0]['PatientName']}", 
+                                  parent=appt_window)
+            else:
+                messagebox.showerror("Error", "Patient not found", parent=appt_window)
+    
+    search_patient_btn = tk.Button(form_frame, text="Verify Patient", command=search_patient)
+    apply_styles(search_patient_btn)
+    search_patient_btn.grid(row=1, column=2, padx=5)
+    
+    # Doctor ID with validation
+    tk.Label(form_frame, text="Doctor ID:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
     entry_doctor = tk.Entry(form_frame)
-    entry_doctor.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
+    entry_doctor.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_doctor)
     
-    # Date
-    tk.Label(form_frame, text="Date (YYYY-MM-DD):", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
-    entry_date = tk.Entry(form_frame)
-    entry_date.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_date)
+    # Button to search for doctor
+    def search_doctor():
+        doctor_id = entry_doctor.get()
+        if doctor_id:
+            success, doctor = search_doctors(conn, doctor_id=doctor_id)
+            if success and doctor:
+                messagebox.showinfo("Doctor Found", 
+                                  f"Doctor: {doctor[0]['DoctorName']}", 
+                                  parent=appt_window)
+            else:
+                messagebox.showerror("Error", "Doctor not found", parent=appt_window)
     
-    # Time
-    tk.Label(form_frame, text="Time (HH:MM):", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
-    entry_time = tk.Entry(form_frame)
-    entry_time.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_time)
+    search_doctor_btn = tk.Button(form_frame, text="Verify Doctor", command=search_doctor)
+    apply_styles(search_doctor_btn)
+    search_doctor_btn.grid(row=2, column=2, padx=5)
+    
+    # Date picker (better than text entry)
+    tk.Label(form_frame, text="Appointment Date:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
+    cal = DateEntry(form_frame, width=12, background='darkblue',
+                    foreground='white', borderwidth=2, date_pattern='yyyy-mm-dd')
+    cal.grid(row=3, column=1, pady=5, padx=5, sticky="w")
+    
+    # Time picker
+    tk.Label(form_frame, text="Appointment Time:", bg=BG_COLOR).grid(row=4, column=0, sticky="e", pady=5)
+    time_var = tk.StringVar(value="09:00")
+    time_options = [f"{h:02d}:{m:02d}" for h in range(8, 18) for m in [0, 30]]
+    time_menu = ttk.Combobox(form_frame, textvariable=time_var, values=time_options)
+    time_menu.grid(row=4, column=1, pady=5, padx=5, sticky="w")
+    
+    # Reason/Notes
+    tk.Label(form_frame, text="Reason/Notes:", bg=BG_COLOR).grid(row=5, column=0, sticky="ne", pady=5)
+    notes_entry = tk.Text(form_frame, height=4, width=30)
+    notes_entry.grid(row=5, column=1, pady=5, padx=5, sticky="ew")
+    apply_styles(notes_entry)
     
     def submit():
-        patient_id = entry_patient.get()
-        doctor_id = entry_doctor.get()
-        date = entry_date.get()
-        time = entry_time.get()
+        # Get all values with validation
+        patient_id = entry_patient.get().strip()
+        doctor_id = entry_doctor.get().strip()
+        date = cal.get_date().strftime('%Y-%m-%d')
+        time = time_var.get().strip()
+        notes = notes_entry.get("1.0", tk.END).strip()
         
-        success, message = schedule_appointment(conn, patient_id, doctor_id, date, time)
+        # Validate inputs
+        if not all([patient_id, doctor_id, date, time]):
+            messagebox.showerror("Error", "All fields are required except notes", parent=appt_window)
+            return
+            
+        try:
+            # Validate time format
+            datetime.strptime(time, "%H:%M")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid time format (use HH:MM)", parent=appt_window)
+            return
+            
+        # Call core function
+        success, message = schedule_appointment(conn, patient_id, doctor_id, date, time, notes)
+        
         if success:
-            messagebox.showinfo("Success", message)
+            messagebox.showinfo("Success", message, parent=appt_window)
             appt_window.destroy()
+            
+            # Refresh appointments in doctor menu if it exists
+            for window in appt_window.winfo_children():
+                if isinstance(window, tk.Toplevel) and "Doctor Dashboard" in window.title():
+                    # Find and refresh the appointments view
+                    for widget in window.winfo_children():
+                        if hasattr(widget, '_name') and widget._name == "appointments_frame":
+                            refresh_appointments(widget)
         else:
-            messagebox.showerror("Error", message)
-            appt_window.lift()
-            appt_window.focus_force()
-
+            messagebox.showerror("Error", message, parent=appt_window)
+    
     # Submit button
     submit_btn = tk.Button(
         main_frame,
@@ -1695,59 +3786,186 @@ def schedule_appointment_gui(conn):
         command=submit
     )
     apply_styles(submit_btn)
-    submit_btn.pack(pady=10)
+    submit_btn.pack(pady=15)
     
     # Configure grid weights
     form_frame.grid_columnconfigure(1, weight=1)
+def refresh_appointments(conn, doctor_id, tree_widget):
+    """
+    Truy vấn cơ sở dữ liệu và cập nhật Treeview cuộc hẹn sắp tới.
 
+    Args:
+        conn: Đối tượng kết nối cơ sở dữ liệu.
+        doctor_id (int): ID của bác sĩ hiện tại.
+        tree_widget (ttk.Treeview): Widget Treeview để cập nhật.
+    """
+    if not tree_widget or not tree_widget.winfo_exists():
+        print("Debug: Appointment tree widget no longer exists. Skipping refresh.")
+        return
+
+    try:
+        for item in tree_widget.get_children():
+            tree_widget.delete(item)
+    except tk.TclError as e:
+         print(f"Debug: Error clearing tree (widget might be destroyed): {e}")
+         return
+
+    try:
+        if conn:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT DATE_FORMAT(AppointmentTime, '%H:%i') as ApptTime, p.PatientName, a.Status
+                    FROM Appointments a
+                    JOIN Patients p ON a.PatientID = p.PatientID
+                    WHERE a.DoctorID = %s AND a.AppointmentDate >= CURDATE() AND a.Status = 'Scheduled'
+                    ORDER BY a.AppointmentDate, a.AppointmentTime
+                    LIMIT 15
+                """, (doctor_id,))
+                upcoming_appts = cursor.fetchall()
+
+                if upcoming_appts:
+                     for appt in upcoming_appts:
+                         time_val = appt.get('ApptTime', 'N/A')
+                         patient_val = appt.get('PatientName', 'N/A')
+                         status_val = appt.get('Status', 'N/A')
+                         tree_widget.insert("", tk.END, values=(time_val, patient_val, status_val))
+                else:
+                     tree_widget.insert("", tk.END, values=("", "No upcoming appointments", ""))
+        else:
+            tree_widget.insert("", tk.END, values=("Error", "Database connection lost", ""))
+            print("Debug: Database connection lost during refresh.")
+
+    except MySQLError as db_error:
+        print(f"Database Error during appointment refresh: {db_error}")
+        try:
+            for item in tree_widget.get_children(): tree_widget.delete(item)
+            tree_widget.insert("", tk.END, values=("DB Error", "Check logs", "Error"))
+        except tk.TclError: pass
+    except Exception as e:
+        print(f"Unexpected Error during appointment refresh: {e}")
+        try:
+            for item in tree_widget.get_children(): tree_widget.delete(item)
+            tree_widget.insert("", tk.END, values=("Error", "Check logs", "Error"))
+        except tk.TclError: pass
 def view_appointments_gui(conn, role, user_id=None):
-    """GUI for viewing appointments using Treeview and filters"""
+    """GUI for viewing appointments with consistent styling to doctor dashboard"""
     view_window = tk.Toplevel()
-    view_window.title("View Appointments")
-    view_window.geometry("1000x600")
-    view_window.config(bg=BG_COLOR)
+    view_window.title("Appointment Management")
+    view_window.geometry("1100x700")
+    view_window.config(bg="#f5f7fa")  # Matching light background
     center_window(view_window)
-    view_window.lift()
-    view_window.attributes('-topmost', True)
-    view_window.after(100, lambda: view_window.attributes('-topmost', False))
+    
+    # Modern color scheme matching doctor dashboard
+    primary_color = "#4a6fa5"
+    accent_color = "#5d9cec"
+    dark_color = "#333333"
+    light_color = "#f5f7fa"
+    card_bg = "white"
+    card_border = "#e0e0e0"
+    
+    # Font settings matching doctor dashboard
+    try:
+        title_font = ("Segoe UI", 16, "bold")
+        header_font = ("Segoe UI", 12, "bold")
+        normal_font = ("Segoe UI", 11)
+        small_font = ("Segoe UI", 10)
+    except tk.TclError:
+        title_font = ("Arial", 16, "bold")
+        header_font = ("Arial", 12, "bold")
+        normal_font = ("Arial", 11)
+        small_font = ("Arial", 10)
 
-    tk.Label(view_window, text="Appointments", font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
+    # Main container frame
+    main_frame = tk.Frame(view_window, bg=light_color, padx=20, pady=20)
+    main_frame.pack(fill="both", expand=True)
 
-    # Search frame
-    filter_frame = tk.Frame(view_window, bg=BG_COLOR)
-    filter_frame.pack(pady=5)
+    # Header
+    header_frame = tk.Frame(main_frame, bg=light_color)
+    header_frame.pack(fill="x", pady=(0, 20))
+    
+    tk.Label(header_frame, text="Appointment Management", 
+            font=title_font, bg=light_color, fg=dark_color).pack(side="left")
+    
+    # Filter controls in a card
+    filter_card = tk.Frame(main_frame, bg=card_bg, bd=0, relief="flat",
+                         highlightbackground=card_border, highlightthickness=1,
+                         padx=15, pady=15)
+    filter_card.pack(fill="x", pady=(0, 15))
 
     # Date filters
-    tk.Label(filter_frame, text="Year:", bg=BG_COLOR).grid(row=0, column=0, padx=5)
-    entry_year = tk.Entry(filter_frame, width=8)
-    entry_year.grid(row=0, column=1, padx=5)
-    apply_styles(entry_year)
-
-    tk.Label(filter_frame, text="Month:", bg=BG_COLOR).grid(row=0, column=2, padx=5)
-    entry_month = tk.Entry(filter_frame, width=8)
-    entry_month.grid(row=0, column=3, padx=5)
-    apply_styles(entry_month)
-
-    tk.Label(filter_frame, text="Day:", bg=BG_COLOR).grid(row=0, column=4, padx=5)
-    entry_day = tk.Entry(filter_frame, width=8)
-    entry_day.grid(row=0, column=5, padx=5)
-    apply_styles(entry_day)
-
-    tk.Label(filter_frame, text="Status:", bg=BG_COLOR).grid(row=0, column=6, padx=5)
+    tk.Label(filter_card, text="Filter by Date:", font=small_font, 
+            bg=card_bg, fg="#7f8c8d").grid(row=0, column=0, padx=5, sticky="w")
+    
+    tk.Label(filter_card, text="Year:", bg=card_bg).grid(row=1, column=0, padx=5)
+    entry_year = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
+    entry_year.grid(row=1, column=1, padx=5)
+    
+    tk.Label(filter_card, text="Month:", bg=card_bg).grid(row=1, column=2, padx=5)
+    entry_month = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
+    entry_month.grid(row=1, column=3, padx=5)
+    
+    tk.Label(filter_card, text="Day:", bg=card_bg).grid(row=1, column=4, padx=5)
+    entry_day = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
+    entry_day.grid(row=1, column=5, padx=5)
+    
+    tk.Label(filter_card, text="Status:", bg=card_bg).grid(row=1, column=6, padx=5)
     status_var = tk.StringVar(value="All")
     status_options = ["All", "Scheduled", "Completed", "Cancelled"]
-    status_menu = tk.OptionMenu(filter_frame, status_var, *status_options)
-    status_menu.config(width=12)
-    status_menu.grid(row=0, column=7, padx=5)
-
-    # Treeview for appointments
-    columns = ("AppointmentID", "Date", "Time", "Status", "DoctorName", "DoctorID", "PatientName", "PatientID")
-    tree = ttk.Treeview(view_window, columns=columns, show='headings')
-    col_widths = [100, 100, 80, 100, 150, 80, 150, 80]
-    for col, width in zip(columns, col_widths):
+    status_menu = tk.OptionMenu(filter_card, status_var, *status_options)
+    status_menu.config(font=small_font, width=12, bd=1, relief="solid")
+    status_menu.grid(row=1, column=7, padx=5)
+    
+    # Search button with matching style
+    search_btn = tk.Button(filter_card, text="Search", 
+                         bg=accent_color, fg="white", font=small_font,
+                         bd=0, relief="flat", padx=15, pady=5)
+    search_btn.grid(row=1, column=8, padx=10)
+    
+    # Treeview in a card
+    tree_card = tk.Frame(main_frame, bg=card_bg, bd=0, relief="flat",
+                        highlightbackground=card_border, highlightthickness=1,
+                        padx=15, pady=15)
+    tree_card.pack(fill="both", expand=True)
+    
+    # Configure treeview style to match the theme
+    style = ttk.Style()
+    style.configure("Treeview.Heading", font=small_font, background=light_color, 
+                   foreground=dark_color, relief="flat")
+    style.configure("Treeview", font=small_font, rowheight=28, 
+                   fieldbackground=card_bg, background=card_bg)
+    style.map("Treeview", background=[('selected', primary_color)], 
+             foreground=[('selected', 'white')])
+    
+    # Treeview columns
+    columns = ("ID", "Date", "Time", "Status", "Doctor", "Patient")
+    tree = ttk.Treeview(tree_card, columns=columns, show='headings', height=15)
+    
+    # Column configurations
+    tree.column("ID", width=80, anchor=tk.W)
+    tree.column("Date", width=100, anchor=tk.W)
+    tree.column("Time", width=80, anchor=tk.W)
+    tree.column("Status", width=100, anchor=tk.W)
+    tree.column("Doctor", width=200, anchor=tk.W)
+    tree.column("Patient", width=200, anchor=tk.W)
+    
+    # Headings
+    for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=width, anchor=tk.W)
-    tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+    
+    # Scrollbar
+    scrollbar = ttk.Scrollbar(tree_card, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    
+    # Grid layout
+    tree.grid(row=0, column=0, sticky="nsew")
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    tree_card.grid_rowconfigure(0, weight=1)
+    tree_card.grid_columnconfigure(0, weight=1)
+    
+    # Tag configurations for different statuses
+    tree.tag_configure('Scheduled', background='#e3f2fd')
+    tree.tag_configure('Completed', background='#e8f5e9')
+    tree.tag_configure('Cancelled', background='#ffebee')
 
     def fetch_appointments():
         try:
@@ -1768,24 +3986,30 @@ def view_appointments_gui(conn, role, user_id=None):
                 messagebox.showerror("Error", result)
                 return
             if not result:
-                messagebox.showinfo("Result", "No appointments found matching the criteria.")
+                messagebox.showinfo("Info", "No appointments found matching the criteria.")
                 return
 
             for appt in result:
                 tree.insert("", tk.END, values=(
-                    appt["AppointmentID"], appt["AppointmentDate"], appt["AppointmentTime"], appt["Status"],
-                    appt["DoctorName"], appt["DoctorID"], appt["PatientName"], appt["PatientID"]
-                ))
+                    appt["AppointmentID"],
+                    appt["AppointmentDate"].strftime('%Y-%m-%d') if appt["AppointmentDate"] else "",
+                    appt["AppointmentTime"].strftime('%H:%M') if appt["AppointmentTime"] else "",
+                    appt["Status"],
+                    appt["DoctorName"],
+                    appt["PatientName"]
+                ), tags=(appt["Status"],))
 
         except ValueError:
             messagebox.showerror("Error", "Please enter valid numbers for year/month/day")
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
 
-    search_btn = tk.Button(filter_frame, text="Search", command=fetch_appointments)
-    apply_styles(search_btn)
-    search_btn.grid(row=0, column=8, padx=10)
-
+    search_btn.config(command=fetch_appointments)
+    
+    # Add some padding at the bottom
+    tk.Frame(main_frame, bg=light_color, height=20).pack()
+    
+    # Initial data load
     view_window.after(100, fetch_appointments)
 
 def update_appointment_status_gui(conn):
@@ -1796,7 +4020,7 @@ def update_appointment_status_gui(conn):
     update_window.config(bg=BG_COLOR)
     center_window(update_window)
     update_window.lift()
-    update_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
+    update_window.attributes('-topmost', True)
     update_window.after(100, lambda: update_window.attributes('-topmost', False))
     # Main frame
     main_frame = tk.Frame(update_window, bg=BG_COLOR)
@@ -2381,7 +4605,463 @@ def refresh_room_status(conn, tree):
     
     except MySQLError as e:
         messagebox.showerror("Error", f"Failed to load room status: {str(e)}")
+### Admission_order
+def order_admission_gui(conn, doctor_id):
+    """GUI for Doctor to order patient admission."""
+    order_window = tk.Toplevel()
+    order_window.title("Order Patient Admission")
+    order_window.geometry("450x350") # Increased height slightly
+    order_window.config(bg=BG_COLOR)
+    center_window(order_window)
+    order_window.lift()
+    order_window.attributes('-topmost', True)
+    order_window.after(100, lambda: order_window.attributes('-topmost', False))
 
+    main_frame = tk.Frame(order_window, bg=BG_COLOR, padx=15, pady=15)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+    main_frame.columnconfigure(1, weight=1) # Make entry column expand
+
+    # Patient ID
+    tk.Label(main_frame, text="Patient ID:", bg=BG_COLOR, font=LABEL_FONT).grid(row=0, column=0, sticky="e", pady=5)
+    patient_id_entry = tk.Entry(main_frame, font=LABEL_FONT)
+    patient_id_entry.grid(row=0, column=1, sticky="ew", pady=5, padx=5)
+    apply_styles(patient_id_entry)
+
+    # Department Selection
+    tk.Label(main_frame, text="Department:", bg=BG_COLOR, font=LABEL_FONT).grid(row=1, column=0, sticky="e", pady=5)
+    dept_var = tk.StringVar()
+    dept_combobox = ttk.Combobox(main_frame, textvariable=dept_var, state="readonly", font=LABEL_FONT)
+    dept_combobox.grid(row=1, column=1, sticky="ew", pady=5, padx=5)
+
+    # Load departments into combobox
+    success_dept, departments = get_departments_list(conn)
+    if success_dept:
+        dept_dict = {f"{d['DepartmentID']} - {d['DepartmentName']}": d['DepartmentID'] for d in departments}
+        dept_combobox['values'] = list(dept_dict.keys())
+    else:
+        messagebox.showerror("Error", f"Could not load departments: {departments}", parent=order_window)
+        dept_combobox['values'] = ["Error loading"]
+
+    # Reason for Admission
+    tk.Label(main_frame, text="Reason:", bg=BG_COLOR, font=LABEL_FONT).grid(row=2, column=0, sticky="ne", pady=5)
+    reason_text = scrolledtext.ScrolledText(main_frame, height=4, width=30, wrap=tk.WORD, font=LABEL_FONT)
+    reason_text.grid(row=2, column=1, sticky="ew", pady=5, padx=5)
+    apply_styles(reason_text) # Basic styling
+
+    # Optional Notes
+    tk.Label(main_frame, text="Notes (Optional):", bg=BG_COLOR, font=LABEL_FONT).grid(row=3, column=0, sticky="ne", pady=5)
+    notes_text = scrolledtext.ScrolledText(main_frame, height=3, width=30, wrap=tk.WORD, font=LABEL_FONT)
+    notes_text.grid(row=3, column=1, sticky="ew", pady=5, padx=5)
+    apply_styles(notes_text)
+
+    def submit_order():
+        patient_id = patient_id_entry.get().strip()
+        dept_selection = dept_var.get()
+        reason = reason_text.get("1.0", tk.END).strip()
+        notes = notes_text.get("1.0", tk.END).strip() or None
+
+        if not patient_id or not dept_selection or not reason:
+            messagebox.showerror("Input Error", "Patient ID, Department, and Reason are required.", parent=order_window)
+            order_window.lift(); order_window.focus_force(); return
+
+        # Get DepartmentID from selection
+        dept_id = dept_dict.get(dept_selection)
+        if not dept_id:
+            messagebox.showerror("Input Error", "Invalid department selected.", parent=order_window)
+            order_window.lift(); order_window.focus_force(); return
+
+        success, message = create_admission_order(conn, patient_id, doctor_id, dept_id, reason, notes)
+
+        if success:
+            messagebox.showinfo("Success", message, parent=order_window)
+            order_window.destroy()
+        else:
+            messagebox.showerror("Error", message, parent=order_window)
+            order_window.lift(); order_window.focus_force();
+
+    submit_btn = tk.Button(main_frame, text="Submit Admission Order", command=submit_order)
+    apply_styles(submit_btn)
+    submit_btn.grid(row=4, column=0, columnspan=2, pady=15)
+
+
+# <<< REPLACE the placeholder select_room_gui with this >>>
+def select_room_gui(parent_window, conn):
+    """Modal dialog for selecting an available room from all departments."""
+    dialog = tk.Toplevel(parent_window)
+    dialog.title("Select Available Room")
+    dialog.geometry("650x450")  # Tăng kích thước để hiển thị thêm cột
+    dialog.config(bg=BG_COLOR)
+    center_window(dialog)
+    dialog.transient(parent_window)
+    dialog.grab_set()
+
+    selected_room = {'id': None, 'number': None, 'status': None}
+
+    tk.Label(dialog, text="Available Rooms in Hospital",
+             font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
+
+    # Thêm nút refresh
+    refresh_btn = tk.Button(dialog, text="🔄 Refresh", command=lambda: load_rooms())
+    apply_styles(refresh_btn)
+    refresh_btn.pack(anchor='ne', padx=10)
+
+    tree_frame = tk.Frame(dialog, bg=BG_COLOR)
+    tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+    # Thêm cột Status
+    cols = ("RoomID", "RoomNumber", "TypeName", "Department", "Status", "Cost")
+    tree = ttk.Treeview(tree_frame, columns=cols, show="headings", height=12)
+    
+    # Định dạng cột
+    col_widths = [60, 100, 120, 120, 100, 100]
+    for col, width in zip(cols, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.CENTER if col in ["RoomID", "Status"] else tk.W)
+
+    scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    
+    tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    # Tag màu cho các trạng thái
+    tree.tag_configure('Available', background='#e8f5e9')  # Xanh nhạt
+    tree.tag_configure('Occupied', background='#ffebee')   # Đỏ nhạt
+    tree.tag_configure('Maintenance', background='#fff3e0') # Cam nhạt
+    tree.tag_configure('Cleaning', background='#e3f2fd')   # Xanh da trời nhạt
+
+    def load_rooms():
+        tree.delete(*tree.get_children())
+        try:
+            success, rooms_data = get_all_rooms_with_status(conn)
+            if success:
+                if rooms_data:
+                    for room in rooms_data:
+                        status = room.get('Status', 'Unknown')
+                        tags = (status,)
+                        
+                        tree.insert("", tk.END, 
+                                  values=(
+                                      room.get('RoomID', 'N/A'),
+                                      room.get('RoomNumber', 'N/A'),
+                                      room.get('TypeName', 'N/A'),
+                                      room.get('DepartmentName', 'N/A'),
+                                      status,
+                                      f"{room.get('BaseCost', 0):,.0f} VND"
+                                  ),
+                                  tags=tags)
+                else:
+                    tree.insert("", tk.END, values=("", "No rooms found", "", "", "", ""))
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load rooms: {str(e)}", parent=dialog)
+
+    def confirm_selection():
+        selected_items = tree.selection()
+        if not selected_items:
+            messagebox.showwarning("Selection Required", "Please select a room first", parent=dialog)
+            return
+
+        item = tree.item(selected_items[0])
+        if item['values'][4] != 'Available':  # Check Status column
+            messagebox.showwarning("Invalid Selection", 
+                                 "Please select an AVAILABLE room only", 
+                                 parent=dialog)
+            return
+
+        selected_room.update({
+            'id': item['values'][0],
+            'number': item['values'][1],
+            'status': item['values'][4]
+        })
+        dialog.destroy()
+
+    # Button frame
+    btn_frame = tk.Frame(dialog, bg=BG_COLOR)
+    btn_frame.pack(pady=10)
+
+    select_btn = tk.Button(btn_frame, text="Select Room", command=confirm_selection)
+    apply_styles(select_btn)
+    select_btn.pack(side=tk.LEFT, padx=10)
+
+    cancel_btn = tk.Button(btn_frame, text="Cancel", command=dialog.destroy)
+    apply_styles(cancel_btn)
+    cancel_btn.pack(side=tk.LEFT, padx=10)
+
+    load_rooms()  # Load data immediately
+    dialog.wait_window()
+    return selected_room
+
+def process_admission_gui(conn, receptionist_username):
+    """GUI for Receptionist to process pending admission orders (Improved Version)."""
+    proc_window = tk.Toplevel()
+    proc_window.title("Process Patient Admission")
+    proc_window.geometry("1100x750")
+    proc_window.config(bg=BG_COLOR)
+    center_window(proc_window)
+    proc_window.lift()
+    proc_window.attributes('-topmost', True)
+    proc_window.after(100, lambda: proc_window.attributes('-topmost', False))
+
+    main_frame = tk.Frame(proc_window, bg=BG_COLOR, padx=15, pady=15)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # --- Pending Orders Section (Treeview) ---
+    pending_frame = tk.LabelFrame(main_frame,
+                                text="Pending Admission Orders",
+                                bg=BG_COLOR,
+                                fg=TEXT_COLOR,
+                                padx=10,
+                                pady=10,
+                                font=LABEL_FONT)
+    pending_frame.pack(fill=tk.X, pady=(0, 10))
+
+    pending_cols = ("OrderID", "PatientName", "DoctorName", "Department", "OrderDate", "Reason")
+    pending_tree = ttk.Treeview(pending_frame, columns=pending_cols, show="headings", height=8)
+    pending_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    pending_scroll = ttk.Scrollbar(pending_frame, orient="vertical", command=pending_tree.yview)
+    pending_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+    pending_tree.configure(yscrollcommand=pending_scroll.set)
+
+    # Configure columns
+    col_widths = [80, 150, 150, 120, 100, 200]
+    for col, width in zip(pending_cols, col_widths):
+        pending_tree.heading(col, text=col)
+        pending_tree.column(col, width=width, anchor=tk.W)
+
+    # --- Details Frame (Patient Info + Room Assignment) ---
+    details_frame = tk.LabelFrame(main_frame,
+                                text="Admission Details",
+                                bg=BG_COLOR,
+                                fg=TEXT_COLOR,
+                                padx=15,
+                                pady=10,
+                                font=LABEL_FONT)
+    details_frame.pack(fill=tk.BOTH, expand=True, pady=(10, 10))
+
+    # Divide details frame into left (patient info) and right (room assignment)
+    left_frame = tk.Frame(details_frame, bg=BG_COLOR)
+    left_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+    right_frame = tk.Frame(details_frame, bg=BG_COLOR)
+    right_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=False, padx=(10, 0))
+
+    # --- Patient Details Display ---
+    tk.Label(left_frame, text="Patient Information:",
+            font=(LABEL_FONT[0], LABEL_FONT[1], 'bold'),
+            bg=BG_COLOR).pack(anchor='w', pady=(0, 10))
+
+    # Create a dictionary to hold all the StringVars for patient details
+    details_vars = {
+        "order_id": tk.StringVar(value="Not selected"),
+        "patient_id": tk.StringVar(value="Not selected"),
+        "patient_name": tk.StringVar(value="Not selected"),
+        "dob": tk.StringVar(value="Not selected"),
+        "gender": tk.StringVar(value="Not selected"),
+        "address": tk.StringVar(value="Not selected"),
+        "phone": tk.StringVar(value="Not selected"),
+        "doctor": tk.StringVar(value="Not selected"),
+        "department": tk.StringVar(value="Not selected"),
+        "reason": tk.StringVar(value="Not selected"),
+        "insurance": tk.StringVar(value="Not selected")
+    }
+
+    # Helper function to create labeled fields
+    def create_labeled_field(parent, label_text, var):
+        frame = tk.Frame(parent, bg=BG_COLOR)
+        frame.pack(fill=tk.X, pady=2)
+        tk.Label(frame, text=label_text, width=15, anchor='e',
+                bg=BG_COLOR, font=LABEL_FONT).pack(side=tk.LEFT)
+        tk.Label(frame, textvariable=var, relief=tk.SUNKEN,
+                bg=ENTRY_BG, font=LABEL_FONT, anchor='w').pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    # Create all patient info fields
+    create_labeled_field(left_frame, "Order ID:", details_vars["order_id"])
+    create_labeled_field(left_frame, "Patient ID:", details_vars["patient_id"])
+    create_labeled_field(left_frame, "Patient Name:", details_vars["patient_name"])
+    create_labeled_field(left_frame, "Date of Birth:", details_vars["dob"])
+    create_labeled_field(left_frame, "Gender:", details_vars["gender"])
+    create_labeled_field(left_frame, "Address:", details_vars["address"])
+    create_labeled_field(left_frame, "Phone:", details_vars["phone"])
+    create_labeled_field(left_frame, "Doctor:", details_vars["doctor"])
+    create_labeled_field(left_frame, "Department:", details_vars["department"])
+    create_labeled_field(left_frame, "Reason:", details_vars["reason"])
+    create_labeled_field(left_frame, "Insurance:", details_vars["insurance"])
+
+    # --- Room Selection and Display ---
+    room_info_frame = tk.Frame(right_frame, bg=BG_COLOR)
+    room_info_frame.pack(fill=tk.X, pady=5)
+
+    tk.Label(room_info_frame, text="Selected Room:", bg=BG_COLOR).pack(anchor='w')
+    selected_room_var = tk.StringVar(value="No room selected")
+    tk.Label(room_info_frame, textvariable=selected_room_var,
+        font=('Helvetica', 10, 'bold'), bg=BG_COLOR).pack(anchor='w')
+
+    # This dictionary will store the details of the chosen room
+    # It needs to be accessible by both select_room and process_admission
+    # Making it an instance variable or passing it around might be cleaner,
+    # but using a dictionary accessible within the scope works here.
+    _selected_room_data = {'id': None, 'number': None, 'status': None}
+
+    # Select room button
+    def select_room():
+        # Call the GUI function to select a room. It returns a dictionary.
+        room_info = select_room_gui(proc_window, conn) # Assuming select_room_gui is defined elsewhere
+
+        # Check if a valid room ID was returned
+        if room_info and room_info.get('id'):
+             _selected_room_data['id'] = room_info.get('id')
+             _selected_room_data['number'] = room_info.get('number')
+             _selected_room_data['status'] = room_info.get('status')
+
+             # Update the display label
+             selected_room_var.set(f"Room {_selected_room_data['number']} (ID: {_selected_room_data['id']}, Status: {_selected_room_data['status']})")
+        else:
+             # Reset if no room was selected or selection was cancelled
+             _selected_room_data.update({'id': None, 'number': None, 'status': None})
+             selected_room_var.set("No room selected")
+
+
+    select_room_btn = tk.Button(right_frame, text="Select Room",
+                               command=select_room)
+    apply_styles(select_room_btn)
+    select_room_btn.pack(pady=5)
+
+    # --- Process Admission Button ---
+    def process_admission():
+        order_id_str = details_vars["order_id"].get()
+        patient_id_str = details_vars["patient_id"].get()
+
+        # Check if an order is selected
+        if order_id_str == "Not selected" or not order_id_str:
+            messagebox.showwarning("No Order Selected",
+                                "Please select an admission order first",
+                                parent=proc_window)
+            proc_window.lift(); proc_window.focus_force(); return
+
+        # **** CRITICAL CHANGE: Check the _selected_room_data dictionary ****
+        if not _selected_room_data.get('id'):
+            messagebox.showwarning("No Room Selected",
+                                "Please select a room for the patient",
+                                parent=proc_window)
+            proc_window.lift(); proc_window.focus_force(); return
+
+        # Ensure the selected room is 'Available' (or handle other statuses if needed)
+        if _selected_room_data.get('status') != 'Available':
+             messagebox.showwarning("Room Not Available",
+                                  f"Selected room ({_selected_room_data.get('number')}) is not Available.",
+                                  parent=proc_window)
+             proc_window.lift(); proc_window.focus_force(); return
+
+        # Get all needed information
+        order_id = int(order_id_str)
+        patient_id = int(patient_id_str)
+        room_id = _selected_room_data['id'] # Get ID from the dictionary
+        room_number = _selected_room_data['number'] # Get number for confirmation message
+
+        # Confirm with the receptionist
+        confirm_msg = f"Confirm admission for patient {details_vars['patient_name'].get()}?\n"
+        confirm_msg += f"Room: {room_number} (ID: {room_id})\n" # Show number and ID
+        confirm_msg += f"Order ID: {order_id}"
+
+        if not messagebox.askyesno("Confirm Admission", confirm_msg, parent=proc_window):
+            return
+
+        # Call the core logic function to process admission
+        # Assuming process_admission_order exists in core_logic
+        success, message = process_admission_order(conn, order_id, patient_id, room_id, receptionist_username)
+
+        if success:
+            messagebox.showinfo("Success", message, parent=proc_window)
+            # Refresh the pending orders list
+            load_pending_orders()
+            # Clear the details and selected room info
+            for var in details_vars.values():
+                var.set("Not selected")
+            _selected_room_data.update({'id': None, 'number': None, 'status': None})
+            selected_room_var.set("No room selected")
+        else:
+            messagebox.showerror("Error", message, parent=proc_window)
+            proc_window.lift(); proc_window.focus_force()
+
+
+    process_btn = tk.Button(main_frame, text="Process Admission",
+                          command=process_admission)
+    apply_styles(process_btn)
+    process_btn.pack(pady=10)
+
+    # --- Function to Load Pending Orders ---
+    def load_pending_orders():
+        pending_tree.delete(*pending_tree.get_children())
+        # Assuming get_pending_admission_orders exists in core_logic
+        success, orders = get_pending_admission_orders(conn)
+
+        if success:
+            if orders:
+                for order in orders:
+                    pending_tree.insert("", tk.END, values=(
+                        order["OrderID"],
+                        order["PatientName"],
+                        order["DoctorName"],
+                        order["DepartmentName"],
+                        order["OrderDate"].strftime('%Y-%m-%d') if order["OrderDate"] else "N/A",
+                        order["Reason"]
+                    ))
+            else:
+                pending_tree.insert("", tk.END, values=("", "No pending admission orders found", "", "", "", ""))
+        else:
+            messagebox.showerror("Error", f"Failed to load orders: {orders}", parent=proc_window)
+
+    # --- Function to Handle Order Selection ---
+    def on_order_select(event):
+        selected_item = pending_tree.focus()
+        if not selected_item:
+            return
+
+        item_data = pending_tree.item(selected_item)
+        values = item_data['values']
+
+        if not values or len(values) < 6:
+            return
+
+        order_id = values[0]
+
+        # Get full order details from database
+        # Assuming get_admission_order_details exists in core_logic
+        success, order_details = get_admission_order_details(conn, order_id)
+
+        if success:
+            # Update the patient details display
+            details_vars["order_id"].set(order_details["OrderID"])
+            details_vars["patient_id"].set(order_details["PatientID"])
+            details_vars["patient_name"].set(order_details["PatientName"])
+            details_vars["dob"].set(str(order_details["DateOfBirth"]))
+            details_vars["gender"].set(order_details["Gender"])
+            details_vars["address"].set(order_details["Address"])
+            details_vars["phone"].set(order_details["PhoneNumber"])
+            details_vars["doctor"].set(order_details["DoctorName"])
+            details_vars["department"].set(order_details["DepartmentName"])
+            details_vars["reason"].set(order_details["Reason"])
+            details_vars["insurance"].set(order_details.get("InsuranceProvider", "None"))
+
+            # **** Clear previously selected room when a new order is selected ****
+            _selected_room_data.update({'id': None, 'number': None, 'status': None})
+            selected_room_var.set("No room selected")
+        else:
+            messagebox.showerror("Error", f"Failed to load order details: {order_details}", parent=proc_window)
+            # Clear details if loading fails
+            for var in details_vars.values(): var.set("Not selected")
+            _selected_room_data.update({'id': None, 'number': None, 'status': None})
+            selected_room_var.set("No room selected")
+
+
+    # Bind selection event
+    pending_tree.bind('<<TreeviewSelect>>', on_order_select)
+
+    # Initial load of pending orders
+    load_pending_orders()
+
+    proc_window.mainloop()
 def room_management_gui(conn):
     """GUI quản lý phòng (cho receptionist)"""
     room_window = tk.Toplevel()
@@ -2418,7 +5098,7 @@ def room_management_gui(conn):
     # Room type filter
     tk.Label(filter_frame, text="Room Type:", bg=BG_COLOR).pack(side=tk.LEFT, padx=10)
     type_var = tk.StringVar()
-    type_dropdown = ttk.Combobox(filter_filter, textvariable=type_var)
+    type_dropdown = ttk.Combobox(filter_frame, textvariable=type_var)
     
     # Status filter
     tk.Label(filter_frame, text="Status:", bg=BG_COLOR).pack(side=tk.LEFT, padx=10)
@@ -3043,7 +5723,7 @@ def view_patient_services_gui(conn):
     submit_btn.pack(pady=10)
 
 # Prescription GUI Functions
-def create_prescription_gui(conn):
+def create_prescription_gui(conn, doctor_id):
     """GUI tạo đơn thuốc mới (cho bác sĩ)"""
     pres_window = tk.Toplevel()
     pres_window.title("Create New Prescription")
@@ -3057,7 +5737,7 @@ def create_prescription_gui(conn):
     # Main frame
     main_frame = tk.Frame(pres_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
+
     # Title
     title_label = tk.Label(
         main_frame,
@@ -3067,30 +5747,30 @@ def create_prescription_gui(conn):
         fg=ACCENT_COLOR
     )
     title_label.pack(pady=(0, 20))
-    
+
     # Form frame
     form_frame = tk.Frame(main_frame, bg=BG_COLOR)
     form_frame.pack(fill=tk.X, pady=(0, 15))
     form_frame.columnconfigure(1, weight=1)
-    
+
     # Patient ID
     tk.Label(form_frame, text="Patient ID:", bg=BG_COLOR, anchor='e').grid(row=0, column=0, sticky="ew", pady=5, padx=(0,5))
     patient_id_entry = tk.Entry(form_frame)
     patient_id_entry.grid(row=0, column=1, pady=5, sticky="ew")
     apply_styles(patient_id_entry)
-    
+
     # Appointment ID (optional)
     tk.Label(form_frame, text="Appointment ID (optional):", bg=BG_COLOR, anchor='e').grid(row=1, column=0, sticky="ew", pady=5, padx=(0,5))
     appointment_id_entry = tk.Entry(form_frame)
     appointment_id_entry.grid(row=1, column=1, pady=5, sticky="ew")
     apply_styles(appointment_id_entry)
-    
+
     # Diagnosis
     tk.Label(form_frame, text="Diagnosis:", bg=BG_COLOR, anchor='e').grid(row=2, column=0, sticky="ew", pady=5, padx=(0,5))
     diagnosis_entry = tk.Entry(form_frame)
     diagnosis_entry.grid(row=2, column=1, pady=5, sticky="ew")
     apply_styles(diagnosis_entry)
-    
+
     # Notes
     tk.Label(form_frame, text="Notes:", bg=BG_COLOR, anchor='ne').grid(row=3, column=0, sticky="nsew", pady=5, padx=(0,5))
     notes_entry = tk.Text(form_frame, height=4, width=40)
@@ -3099,166 +5779,99 @@ def create_prescription_gui(conn):
     notes_scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=notes_entry.yview)
     notes_scrollbar.grid(row=3, column=2, sticky='ns')
     notes_entry['yscrollcommand'] = notes_scrollbar.set
-    
+
     # Medicine frame
     med_frame = tk.LabelFrame(main_frame, text="Medicines", bg=BG_COLOR, fg=TEXT_COLOR, padx=10, pady=10)
     med_frame.pack(fill=tk.BOTH, expand=True, pady=10)
-    
+
     # Treeview for medicines
     columns = ("Medicine", "Dosage", "Frequency", "Duration", "Instruction", "Quantity")
     med_tree = ttk.Treeview(med_frame, columns=columns, show="headings")
-    
+
     # Configure columns
-    med_tree.heading("Medicine", text="Medicine")
-    med_tree.heading("Dosage", text="Dosage")
-    med_tree.heading("Frequency", text="Frequency")
-    med_tree.heading("Duration", text="Duration")
-    med_tree.heading("Instruction", text="Instruction")
-    med_tree.heading("Quantity", text="Quantity")
-    
-    med_tree.column("Medicine", width=200)
-    med_tree.column("Dosage", width=100)
-    med_tree.column("Frequency", width=120)
-    med_tree.column("Duration", width=100)
-    med_tree.column("Instruction", width=200)
-    med_tree.column("Quantity", width=80, anchor="center")
-    
+    med_tree.heading("Medicine", text="Medicine"); med_tree.column("Medicine", width=200)
+    med_tree.heading("Dosage", text="Dosage"); med_tree.column("Dosage", width=100)
+    med_tree.heading("Frequency", text="Frequency"); med_tree.column("Frequency", width=120)
+    med_tree.heading("Duration", text="Duration"); med_tree.column("Duration", width=100)
+    med_tree.heading("Instruction", text="Instruction"); med_tree.column("Instruction", width=200)
+    med_tree.heading("Quantity", text="Quantity"); med_tree.column("Quantity", width=80, anchor="center")
+
     # Add scrollbar
     scrollbar = ttk.Scrollbar(med_frame, orient="vertical", command=med_tree.yview)
     med_tree.configure(yscrollcommand=scrollbar.set)
-    
     med_tree.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
-    
+
     # Medicine input controls frame
     med_controls_frame = tk.Frame(med_frame, bg=BG_COLOR)
     med_controls_frame.pack(fill=tk.X, pady=5)
-    
+
     # Medicine selection
     tk.Label(med_controls_frame, text="Medicine:", bg=BG_COLOR).grid(row=0, column=0, padx=5, sticky='e')
     med_var = tk.StringVar()
-    med_dropdown = ttk.Combobox(med_controls_frame, textvariable=med_var, width=15)
-    
+    med_dropdown = ttk.Combobox(med_controls_frame, textvariable=med_var, width=25, state='readonly') # Start readonly
+    # Load medicines
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT MedicineID, MedicineName FROM Medicine")
+            cursor.execute("SELECT MedicineID, MedicineName FROM Medicine ORDER BY MedicineName")
             medicines = cursor.fetchall()
             med_dropdown['values'] = [f"{m['MedicineID']} - {m['MedicineName']}" for m in medicines]
     except MySQLError as e:
-        messagebox.showerror("Error", f"Failed to load medicines: {e}")
-        pres_window.lift()
-        pres_window.focus_force()
+        messagebox.showerror("Error", f"Failed to load medicines: {e}", parent=pres_window)
+    except Exception as e:
+        messagebox.showerror("Error", f"Unexpected error loading medicines: {e}", parent=pres_window)
 
-    med_dropdown.grid(row=0, column=1, padx=5, sticky='ew')
-    
-    # Dosage
-    tk.Label(med_controls_frame, text="Dosage:", bg=BG_COLOR).grid(row=0, column=2, padx=5, sticky='e')
-    dosage_entry = tk.Entry(med_controls_frame, width=10)
-    dosage_entry.grid(row=0, column=3, padx=5, sticky='ew')
-    
-    # Frequency
-    tk.Label(med_controls_frame, text="Frequency:", bg=BG_COLOR).grid(row=0, column=4, padx=5, sticky='e')
-    freq_entry = tk.Entry(med_controls_frame, width=10)
-    freq_entry.grid(row=0, column=5, padx=5, sticky='ew')
-    
-    # Duration
-    tk.Label(med_controls_frame, text="Duration:", bg=BG_COLOR).grid(row=1, column=0, padx=5, sticky='e')
-    duration_entry = tk.Entry(med_controls_frame, width=10)
-    duration_entry.grid(row=1, column=1, padx=5, sticky='ew')
-    
-    # Instructions
-    tk.Label(med_controls_frame, text="Instruction:", bg=BG_COLOR).grid(row=1, column=2, padx=5, sticky='e')
-    instruction_entry = tk.Entry(med_controls_frame, width=10)
-    instruction_entry.grid(row=1, column=3, columnspan=3, padx=5, sticky='ew')
-    
-    # Quantity
-    tk.Label(med_controls_frame, text="Quantity:", bg=BG_COLOR).grid(row=1, column=6, padx=5, sticky='e')
-    quantity_entry = tk.Entry(med_controls_frame, width=10)
-    quantity_entry.grid(row=1, column=7, padx=5, sticky='ew')
-    
-    # Button frame
-    btn_frame = tk.Frame(med_controls_frame, bg=BG_COLOR)
-    btn_frame.grid(row=2, column=0, columnspan=8, pady=5, sticky='ew')
-    
-    # Configure grid weights for button frame
-    for i in range(8):
-        btn_frame.columnconfigure(i, weight=1)
-    
-    # Add button (larger)
-    add_btn = tk.Button(
-        btn_frame,
-        text="Add Medicine",
-        command=lambda: add_medicine(),
-        width=8
-    )
-    apply_styles(add_btn)
-    add_btn.grid(row=0, column=0, columnspan=3, padx=5, sticky='ew')
-    
-    # Remove button (larger)
-    remove_btn = tk.Button(
-        btn_frame,
-        text="Remove Selected",
-        command=lambda: remove_medicine(),
-        width=8
-    )
-    apply_styles(remove_btn)
-    remove_btn.grid(row=0, column=3, columnspan=3, padx=5, sticky='ew')
-    
-    # Clear button
-    clear_btn = tk.Button(
-        btn_frame,
-        text="Clear Fields",
-        command=lambda: clear_medicine_fields(),
-        width=8
-    )
-    apply_styles(clear_btn)
-    clear_btn.grid(row=0, column=6, padx=5, sticky='ew')
-    
-    # Move Up button
-    up_btn = tk.Button(
-        btn_frame,
-        text="↑ Move Up",
-        command=lambda: move_medicine_up(),
-        width=8
-    )
-    apply_styles(up_btn)
-    up_btn.grid(row=0, column=7, padx=5, sticky='ew')
-    
+    med_dropdown.grid(row=0, column=1, columnspan=3, padx=5, sticky='ew')
+
+    # Other input fields
+    tk.Label(med_controls_frame, text="Dosage:", bg=BG_COLOR).grid(row=1, column=0, padx=5, pady=2, sticky='e')
+    dosage_entry = tk.Entry(med_controls_frame, width=15); dosage_entry.grid(row=1, column=1, padx=5, pady=2, sticky='ew'); apply_styles(dosage_entry)
+    tk.Label(med_controls_frame, text="Frequency:", bg=BG_COLOR).grid(row=1, column=2, padx=5, pady=2, sticky='e')
+    freq_entry = tk.Entry(med_controls_frame, width=15); freq_entry.grid(row=1, column=3, padx=5, pady=2, sticky='ew'); apply_styles(freq_entry)
+
+    tk.Label(med_controls_frame, text="Duration:", bg=BG_COLOR).grid(row=2, column=0, padx=5, pady=2, sticky='e')
+    duration_entry = tk.Entry(med_controls_frame, width=15); duration_entry.grid(row=2, column=1, padx=5, pady=2, sticky='ew'); apply_styles(duration_entry)
+    tk.Label(med_controls_frame, text="Quantity:", bg=BG_COLOR).grid(row=2, column=2, padx=5, pady=2, sticky='e')
+    quantity_entry = tk.Entry(med_controls_frame, width=10); quantity_entry.grid(row=2, column=3, padx=5, pady=2, sticky='ew'); apply_styles(quantity_entry)
+
+    tk.Label(med_controls_frame, text="Instruction:", bg=BG_COLOR).grid(row=3, column=0, padx=5, pady=2, sticky='e')
+    instruction_entry = tk.Entry(med_controls_frame); instruction_entry.grid(row=3, column=1, columnspan=3, padx=5, pady=2, sticky='ew'); apply_styles(instruction_entry)
+
+    # --- Nested Functions for Medicine Actions ---
     def add_medicine():
         med = med_var.get()
-        dosage = dosage_entry.get()
-        freq = freq_entry.get()
-        duration = duration_entry.get()
-        instruction = instruction_entry.get()
-        quantity = quantity_entry.get()
-        
-        if not all([med, dosage, freq, quantity]):
-            messagebox.showerror("Error", "Please fill all required fields (Medicine, Dosage, Frequency, Quantity)")
-            pres_window.lift()
-            pres_window.focus_force()
-            return
-            
+        dosage = dosage_entry.get().strip()
+        freq = freq_entry.get().strip()
+        duration = duration_entry.get().strip()
+        instruction = instruction_entry.get().strip()
+        quantity_str = quantity_entry.get().strip()
+
+        if not med:
+            messagebox.showerror("Error", "Please select a medicine", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+        if not all([dosage, freq, quantity_str]):
+            messagebox.showerror("Error", "Dosage, Frequency, and Quantity are required", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+
         try:
-            quantity = int(quantity)
-            if quantity <= 0:
-                messagebox.showerror("Error", "Quantity must be a positive number")
-                pres_window.lift()
-                pres_window.focus_force()
-                return
+            quantity_int = int(quantity_str)
+            if quantity_int <= 0: raise ValueError("Quantity must be positive")
         except ValueError:
-            messagebox.showerror("Error", "Quantity must be a number")
-            pres_window.lift()
-            pres_window.focus_force()
-            return
-            
-        med_tree.insert("", "end", values=(med, dosage, freq, duration or "", instruction or "", quantity))
+            messagebox.showerror("Error", "Quantity must be a positive number", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+
+        med_tree.insert("", "end", values=(med, dosage, freq, duration or "", instruction or "", quantity_int))
         clear_medicine_fields()
-    
+
     def remove_medicine():
-        selected = med_tree.selection()
-        if selected:
-            med_tree.delete(selected)
-    
+        selected_items = med_tree.selection()
+        if selected_items:
+            if messagebox.askyesno("Confirm", "Remove selected medicine(s)?", parent=pres_window):
+                 for item in selected_items: med_tree.delete(item)
+        else:
+             messagebox.showwarning("Selection Required", "Please select medicine(s) to remove", parent=pres_window)
+             pres_window.lift(); pres_window.focus_force()
+
     def clear_medicine_fields():
         med_var.set("")
         dosage_entry.delete(0, tk.END)
@@ -3266,126 +5879,118 @@ def create_prescription_gui(conn):
         duration_entry.delete(0, tk.END)
         instruction_entry.delete(0, tk.END)
         quantity_entry.delete(0, tk.END)
-    
+
     def move_medicine_up():
         selected = med_tree.selection()
-        if not selected:
-            return
-            
+        if not selected: return
         selected_item = selected[0]
         prev_item = med_tree.prev(selected_item)
-        
-        if prev_item:
-            # Get values
-            values = med_tree.item(selected_item, 'values')
-            prev_values = med_tree.item(prev_item, 'values')
-            
-            # Swap values
-            med_tree.item(prev_item, values=values)
-            med_tree.item(selected_item, values=prev_values)
-            
-            # Reselect the item
-            med_tree.selection_set(selected_item)
-    
-    # Submit button frame
-    submit_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    submit_frame.pack(fill=tk.X, pady=10)
-    
+        if prev_item: med_tree.move(selected_item, med_tree.parent(selected_item), med_tree.index(prev_item))
+
+    # --- Button Frame for Medicine Actions ---
+    btn_frame = tk.Frame(med_controls_frame, bg=BG_COLOR)
+    btn_frame.grid(row=4, column=0, columnspan=4, pady=8, sticky='ew') # Use grid
+    # Place buttons
+    add_btn = tk.Button(btn_frame, text="Add Medicine", command=add_medicine, width=15); apply_styles(add_btn); add_btn.pack(side=tk.LEFT, padx=5)
+    remove_btn = tk.Button(btn_frame, text="Remove Selected", command=remove_medicine, width=15); apply_styles(remove_btn); remove_btn.pack(side=tk.LEFT, padx=5)
+    clear_btn = tk.Button(btn_frame, text="Clear Fields", command=clear_medicine_fields, width=15); apply_styles(clear_btn); clear_btn.pack(side=tk.LEFT, padx=5)
+    up_btn = tk.Button(btn_frame, text="↑ Move Up", command=move_medicine_up, width=10); apply_styles(up_btn); up_btn.pack(side=tk.LEFT, padx=5)
+
+
+    # --- Nested Function to Submit the Entire Prescription ---
     def submit_prescription():
-        patient_id = patient_id_entry.get()
-        appointment_id = appointment_id_entry.get()
-        diagnosis = diagnosis_entry.get()
-        notes = notes_entry.get("1.0", tk.END).strip()
-        
-        if not patient_id:
-            messagebox.showerror("Error", "Patient ID is required")
-            pres_window.lift()
-            pres_window.focus_force()
-            return
-            
-        if not med_tree.get_children():
-            messagebox.showerror("Error", "Please add at least one medicine")
-            pres_window.lift()
-            pres_window.focus_force()
-            return
-            
+        patient_id_str = patient_id_entry.get().strip()
+        appointment_id_str = appointment_id_entry.get().strip() or None
+        diagnosis = diagnosis_entry.get().strip() or None
+        notes = notes_entry.get("1.0", tk.END).strip() or None
+
+        # Validation
+        if not patient_id_str:
+            messagebox.showerror("Error", "Patient ID is required", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+        try: patient_id_int = int(patient_id_str)
+        except ValueError:
+            messagebox.showerror("Error", "Patient ID must be a number", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+
+        appointment_id_int = None
+        if appointment_id_str:
+            try: appointment_id_int = int(appointment_id_str)
+            except ValueError:
+                 messagebox.showerror("Error", "Appointment ID must be a number if provided", parent=pres_window)
+                 pres_window.lift(); pres_window.focus_force(); return
+
+        medicine_items = med_tree.get_children()
+        if not medicine_items:
+            messagebox.showerror("Error", "Please add at least one medicine", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force(); return
+
+        # Database Interaction
         try:
             with conn.cursor() as cursor:
-                # Check if appointment exists and belongs to this doctor and patient
-                if appointment_id:
-                    cursor.execute("""
-                        SELECT AppointmentID FROM Appointments 
-                        WHERE AppointmentID = %s 
-                        AND DoctorID = %s 
-                        AND PatientID = %s
-                    """, (appointment_id, doctor_id, patient_id))
-                    
+                # Validate Patient ID
+                cursor.execute("SELECT PatientID FROM Patients WHERE PatientID = %s", (patient_id_int,))
+                if not cursor.fetchone():
+                    messagebox.showerror("Error", f"Patient ID '{patient_id_int}' not found.", parent=pres_window)
+                    pres_window.lift(); pres_window.focus_force(); return
+
+                # Validate Appointment ID if provided
+                if appointment_id_int:
+                    cursor.execute("""SELECT AppointmentID FROM Appointments WHERE AppointmentID = %s AND DoctorID = %s AND PatientID = %s""",
+                                   (appointment_id_int, doctor_id, patient_id_int)) # Use doctor_id parameter
                     if not cursor.fetchone():
-                        messagebox.showerror("Error", "Appointment not found or doesn't match patient/doctor")
-                        pres_window.lift()
-                        pres_window.focus_force()
-                        return
-                
-                # Create prescription
-                cursor.execute("""
-                    INSERT INTO Prescription (
-                        AppointmentID, 
-                        PatientID, 
-                        DoctorID, 
-                        PrescriptionDate, 
-                        Diagnosis, 
-                        Notes
-                    )
-                    VALUES (%s, %s, %s, CURDATE(), %s, %s)
-                """, (
-                    appointment_id if appointment_id else None,
-                    patient_id,
-                    doctor_id,
-                    diagnosis or None,
-                    notes or None
-                ))
-                
+                        messagebox.showerror("Error", "Appointment ID not found or doesn't match patient/doctor.", parent=pres_window)
+                        pres_window.lift(); pres_window.focus_force(); return
+
+                # *** Insert Prescription using the doctor_id PARAMETER ***
+                cursor.execute("""INSERT INTO Prescription (AppointmentID, PatientID, DoctorID, PrescriptionDate, Diagnosis, Notes)
+                                  VALUES (%s, %s, %s, CURDATE(), %s, %s)""",
+                               (appointment_id_int, patient_id_int, doctor_id, diagnosis, notes)) # doctor_id is now defined
                 pres_id = cursor.lastrowid
-                
-                # Add prescription details
-                for item in med_tree.get_children():
-                    med, dosage, freq, duration, instruction, quantity = med_tree.item(item)['values']
-                    med_id = med.split(" - ")[0]  # Extract medicine ID
-                    
-                    cursor.execute("""
-                        INSERT INTO PrescriptionDetails (
-                            PrescriptionID, 
-                            MedicineID, 
-                            Dosage, 
-                            Frequency, 
-                            Duration, 
-                            Instruction, 
-                            QuantityPrescribed
-                        )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s)
-                    """, (pres_id, med_id, dosage, freq, duration or None, instruction or None, quantity))
-                
+
+                # Insert Details
+                for item_id in medicine_items:
+                    med_display_text, dosage, freq, duration, instruction, quantity_str = med_tree.item(item_id)['values']
+                    try:
+                        med_id_str = med_display_text.split(" - ")[0]
+                        med_id_int = int(med_id_str)
+                        quantity_int = int(quantity_str)
+                    except (ValueError, IndexError, TypeError):
+                        conn.rollback()
+                        messagebox.showerror("Data Error", f"Invalid medicine ID or quantity format: {med_display_text}", parent=pres_window)
+                        pres_window.lift(); pres_window.focus_force(); return
+
+                    cursor.execute("""INSERT INTO PrescriptionDetails (PrescriptionID, MedicineID, Dosage, Frequency, Duration, Instruction, QuantityPrescribed)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                                   (pres_id, med_id_int, dosage, freq, duration or None, instruction or None, quantity_int))
+
                 conn.commit()
-                messagebox.showinfo("Success", f"Prescription #{pres_id} created successfully")
-                
-                # Offer to print prescription
-                if messagebox.askyesno("Print Prescription", "Would you like to print this prescription?"):
-                    export_prescription_pdf(conn, pres_id)
-                
+                messagebox.showinfo("Success", f"Prescription #{pres_id} created successfully", parent=pres_window)
+
+                if messagebox.askyesno("Print Prescription", "Would you like to print this prescription?", parent=pres_window):
+                    if 'export_prescription_pdf' in globals(): export_prescription_pdf(conn, pres_id)
+                    else: print("Warning: export_prescription_pdf function not found.")
+
                 pres_window.destroy()
-                
+
         except MySQLError as e:
             conn.rollback()
-            messagebox.showerror("Error", f"Failed to create prescription: {e}")
-    
-    submit_btn = tk.Button(
-        submit_frame,
-        text="Submit Prescription",
-        command=submit_prescription,
-        width=20
-    )
+            messagebox.showerror("Database Error", f"Failed to create prescription: {e}", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force();
+        except Exception as e:
+            conn.rollback()
+            messagebox.showerror("Unexpected Error", f"An error occurred: {e}", parent=pres_window)
+            pres_window.lift(); pres_window.focus_force();
+    # --- End of submit_prescription ---
+
+
+    # --- Final Submit Button ---
+    submit_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    submit_frame.pack(fill=tk.X, pady=10)
+
+    submit_btn = tk.Button(submit_frame, text="Submit Prescription", command=submit_prescription, width=20)
     apply_styles(submit_btn)
-    submit_btn.pack()
+    submit_btn.pack(pady=10)
 
 def view_prescription_gui(conn, prescription_id):
     """GUI xem và xuất đơn thuốc"""
@@ -3939,26 +6544,43 @@ def create_invoice_gui(conn):
     def load_prescription_details(p_id):
         for item in pres_tree.get_children(): pres_tree.delete(item)
         try:
-            success, prescriptions = get_patient_prescriptions(conn, p_id)
-            if success and prescriptions:
-                for pres in prescriptions:
-                    price = float(pres.get('MedicineCost', 0.0)) # Ensure float
-                    qty = int(pres.get('QuantityPrescribed', 0)) # Ensure int
-                    raw_total = qty * price
-                    # Store raw total in the hidden column 'raw_total'
-                    pres_tree.insert("", tk.END, values=(
-                        pres.get('MedicineName', 'N/A'),
-                        pres.get('Dosage', ''),
-                        qty,
-                        format_currency(price),
-                        format_currency(raw_total), # Display formatted total
-                        raw_total                     # Store raw total
-                    ))
-            # After loading, recalculate subtotals
+            # This now calls the CORRECTED function in core_logic.py
+            success, prescriptions_details = get_patient_prescriptions(conn, p_id) # Use the corrected function name
+
+            if success: # Check if the DB query succeeded
+                 if prescriptions_details: # Check if any details were returned
+                     for pres_detail in prescriptions_details: # Iterate through the list of details
+                         price = float(pres_detail.get('MedicineCost', 0.0)) # Ensure float
+                         qty = int(pres_detail.get('QuantityPrescribed', 0)) # Ensure int
+                         raw_total = qty * price
+                         # Store raw total in the hidden column 'raw_total'
+                         pres_tree.insert("", tk.END, values=(
+                             pres_detail.get('MedicineName', 'N/A'),
+                             pres_detail.get('Dosage', ''),
+                             qty,
+                             format_currency(price),
+                             format_currency(raw_total), # Display formatted total
+                             raw_total                     # Store raw total
+                         ))
+                 else:
+                     # Optional: Insert a row indicating no prescriptions found, or just leave it empty
+                     # pres_tree.insert("", tk.END, values=("No prescription items found", "", "", "", "", 0.0))
+                     pass # Treeview will just be empty
+            else:
+                 # Show the error message returned by get_patient_prescriptions
+                 messagebox.showerror("Prescription Load Error", f"Could not load prescriptions: {prescriptions_details}", parent=invoice_window)
+
+
+            # After loading/potentially failing, recalculate subtotals
+            # It's important this runs even if loading fails to reset the cost to 0
             calculate_subtotals_action()
+
         except Exception as e:
-            print(f"Error loading prescriptions: {e}")
-            messagebox.showerror("Prescription Load Error", f"Could not load prescriptions: {e}")
+            # General catch-all for unexpected errors during loading/processing
+            print(f"Error in load_prescription_details GUI function: {e}")
+            messagebox.showerror("Prescription Load Error", f"GUI Error loading prescriptions: {e}", parent=invoice_window)
+            # Still recalculate subtotals to ensure UI consistency
+            calculate_subtotals_action()
 
     def load_room_availability():
         for item in room_avail_tree.get_children(): room_avail_tree.delete(item)
@@ -5709,7 +8331,7 @@ def calculate_insurance_coverage_gui(conn):
     apply_styles(entry_insurance_id)
 
     # Calculate button
-    calculate_button = tk.Button(main_frame, text="Calculate", command=lambda: calculate_insurance_coverage(conn,
+    calculate_button = tk.Button(main_frame, text="Calculate", command=lambda: calculate_insurance_coverage_gui(conn,
         entry_patient_id.get(), entry_insurance_id.get()))
     calculate_button.grid(row=2, columnspan=2, pady=(10, 0))
 
@@ -5742,7 +8364,7 @@ def add_invoice_gui(conn):
     apply_styles(entry_total_amount)
 
     # Save button
-    save_button = tk.Button(main_frame, text="Save", command=lambda: add_invoice(conn,
+    save_button = tk.Button(main_frame, text="Save", command=lambda: add_invoice_gui(conn,
         entry_patient_id.get(), entry_total_amount.get()))
     save_button.grid(row=2, columnspan=2, pady=(10, 0))
 
@@ -5788,6 +8410,7 @@ def view_invoices_gui(conn):
                     text_area.insert(tk.END, f"Patient ID: {invoice['PatientID']}\n")
                     text_area.insert(tk.END, f"Date: {invoice['InvoiceDate']}\n")
                     text_area.insert(tk.END, f"Amount: {invoice['TotalAmount']:.2f} VND\n")
+                    text_area.insert(tk.END, f"Status: {invoice['PaymentStatus']}\n\n")
                     text_area.insert(tk.END, "-"*40 + "\n")
             else:
                 text_area.insert(tk.END, "No invoices found\n")
@@ -5826,74 +8449,512 @@ def export_prescription_pdf(conn, prescription_id):
         messagebox.showinfo("Success", f"Prescription exported to:\n{file_path}")
     else:
         messagebox.showerror("Error", message)
+def export_report_txt(report_title, report_period, content_widget):
+    """Exports the content of a ScrolledText or Treeview widget to a TXT file."""
+    file_path = filedialog.asksaveasfilename(
+        defaultextension=".txt",
+        filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        title=f"Save {report_title}",
+        initialfile=f"{report_title.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.txt"
+    )
+    if not file_path:
+        return # User cancelled
+
+    try:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(f"--- {report_title} ---\n")
+            f.write(f"Period: {report_period}\n")
+            f.write("=" * (len(report_title) + 6) + "\n\n")
+
+            if isinstance(content_widget, scrolledtext.ScrolledText):
+                # For ScrolledText, get all content
+                content = content_widget.get("1.0", tk.END)
+                f.write(content)
+            elif isinstance(content_widget, ttk.Treeview):
+                # For Treeview, write headers and rows
+                columns = content_widget['columns']
+                # Write header, joining with a clear separator like Tab or multiple spaces
+                f.write("\t".join(str(content_widget.heading(col)['text']) for col in columns) + "\n")
+                f.write("-" * 80 + "\n") # Separator line
+                # Write data rows
+                for item_id in content_widget.get_children():
+                    values = content_widget.item(item_id, 'values')
+                    f.write("\t".join(str(v) for v in values) + "\n")
+            else:
+                 f.write("Error: Unsupported widget type for export.")
+
+        messagebox.showinfo("Export Successful", f"Report exported to:\n{file_path}")
+    except Exception as e:
+        messagebox.showerror("Export Error", f"Failed to export report: {e}")
 
 def generate_financial_report_gui(conn):
-    """GUI for generating financial reports"""
+    """GUI for generating and displaying financial reports"""
     report_window = tk.Toplevel()
     report_window.title("Financial Report")
-    report_window.geometry("600x500")
+    report_window.geometry("1000x700")
     report_window.config(bg=BG_COLOR)
     center_window(report_window)
-
-    # Main frame
+    
+    # Main container
     main_frame = tk.Frame(report_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-
-    # Report type selection
-    type_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    type_frame.pack(fill=tk.X, pady=5)
-
-    tk.Label(type_frame, text="Report Type:", bg=BG_COLOR).pack(side="left", padx=5)
-    report_type = tk.StringVar()
-    report_type.set("month")
-    tk.Radiobutton(type_frame, text="Monthly", variable=report_type, value="month", bg=BG_COLOR).pack(side="left", padx=5)
-    tk.Radiobutton(type_frame, text="Yearly", variable=report_type, value="year", bg=BG_COLOR).pack(side="left", padx=5)
-
-    # Year input (for monthly reports)
-    year_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    year_frame.pack(fill=tk.X, pady=5)
-
-    tk.Label(year_frame, text="Year (for monthly report):", bg=BG_COLOR).pack(side="left", padx=5)
-    entry_year = tk.Entry(year_frame)
-    entry_year.pack(side="left", fill=tk.X, expand=True, padx=5)
-    apply_styles(entry_year)
-
-    # Results area
-    text_area = create_scrollable_text(main_frame, height=20, width=70)
     
-    # Generate logic
-    def generate():
-        report_type_val = report_type.get()
-        year = entry_year.get() if report_type_val == "month" else None
-
-        success, result = generate_financial_report(conn, report_type_val, year)
-
-        text_area.delete(1.0, tk.END)
-
-        if success:
-            title, data = result
-            text_area.insert(tk.END, f"{title}\n")
-            text_area.insert(tk.END, "-"*40 + "\n")
-
-            total = 0
-            for row in data:
-                if report_type_val == "month":
-                    text_area.insert(tk.END, f"Month {row['Month']}: {row['Total']:,.2f} VND\n")
-                else:
-                    text_area.insert(tk.END, f"Year {row['Year']}: {row['Total']:,.2f} VND\n")
-                total += row['Total']
-
-            text_area.insert(tk.END, "-"*40 + "\n")
-            text_area.insert(tk.END, f"GRAND TOTAL: {total:,.2f} VND\n")
-        else:
-            messagebox.showerror("Error", result)
-            report_window.focus_force()
-
+    # Title and date controls
+    header_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    header_frame.pack(fill=tk.X, pady=(0, 20))
+    
+    tk.Label(header_frame, text="Financial Report", font=TITLE_FONT, 
+            bg=BG_COLOR, fg=ACCENT_COLOR).pack(side=tk.LEFT)
+    
+    # Date range selection
+    date_frame = tk.Frame(header_frame, bg=BG_COLOR)
+    date_frame.pack(side=tk.RIGHT)
+    
+    tk.Label(date_frame, text="From:", bg=BG_COLOR).grid(row=0, column=0)
+    start_date_entry = DateEntry(date_frame, width=12, date_pattern='yyyy-mm-dd')
+    start_date_entry.grid(row=0, column=1, padx=5)
+    
+    tk.Label(date_frame, text="To:", bg=BG_COLOR).grid(row=0, column=2)
+    end_date_entry = DateEntry(date_frame, width=12, date_pattern='yyyy-mm-dd')
+    end_date_entry.grid(row=0, column=3, padx=5)
+    
+    def generate_report():
+        start_date = start_date_entry.get_date().strftime('%Y-%m-%d') if start_date_entry.get() else None
+        end_date = end_date_entry.get_date().strftime('%Y-%m-%d') if end_date_entry.get() else None
+        
+        success, report_data = get_financial_report_data(conn, start_date, end_date)
+        
+        if not success:
+            messagebox.showerror("Error", report_data)
+            return
+            
+        # Clear previous content
+        for widget in report_frame.winfo_children():
+            widget.destroy()
+            
+        # Display report data
+        notebook = ttk.Notebook(report_frame)
+        notebook.pack(fill=tk.BOTH, expand=True)
+        
+        # 1. Summary tab
+        summary_frame = tk.Frame(notebook, bg=BG_COLOR)
+        notebook.add(summary_frame, text="Summary")
+        
+        # Summary data
+        tk.Label(summary_frame, 
+                text=f"Financial Summary ({report_data['date_range']['start']} to {report_data['date_range']['end']})",
+                font=("Helvetica", 12, "bold"), bg=BG_COLOR).pack(pady=10)
+        
+        summary_data = [
+            ("Total Revenue", f"${report_data['summary']['total_revenue']:,.2f}"),
+            ("Paid Amount", f"${report_data['summary']['paid_amount']:,.2f}"),
+            ("Pending Amount", f"${report_data['summary']['pending_amount']:,.2f}"),
+            ("Invoice Count", report_data['summary']['invoice_count']),
+            ("Average Invoice", f"${report_data['summary']['avg_invoice']:,.2f}")
+        ]
+        
+        for label, value in summary_data:
+            row = tk.Frame(summary_frame, bg=BG_COLOR)
+            row.pack(fill=tk.X, padx=10, pady=5)
+            tk.Label(row, text=label, width=20, anchor=tk.W, bg=BG_COLOR).pack(side=tk.LEFT)
+            tk.Label(row, text=value, bg=BG_COLOR).pack(side=tk.LEFT)
+        
+        # 2. Service Revenue tab
+        service_frame = tk.Frame(notebook, bg=BG_COLOR)
+        notebook.add(service_frame, text="Service Revenue")
+        
+        columns = ("Service", "Count", "Revenue")
+        tree = ttk.Treeview(service_frame, columns=columns, show='headings')
+        
+        for col in columns:
+            tree.heading(col, text=col)
+            tree.column(col, width=100, anchor=tk.CENTER if col != "Service" else tk.W)
+        
+        for service in report_data['service_revenue']:
+            tree.insert("", tk.END, values=(
+                service['ServiceName'],
+                service['service_count'],
+                f"${service['total_revenue']:,.2f}"
+            ))
+        
+        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # 3. Insurance tab
+        insurance_frame = tk.Frame(notebook, bg=BG_COLOR)
+        notebook.add(insurance_frame, text="Insurance")
+        
+        insurance_data = [
+            ("Insurance Claims", report_data['insurance_data']['insurance_count']),
+            ("Total Covered", f"${report_data['insurance_data']['total_covered']:,.2f}"),
+            ("Patient Responsibility", f"${report_data['insurance_data']['total_patient_responsibility']:,.2f}")
+        ]
+        
+        for label, value in insurance_data:
+            row = tk.Frame(insurance_frame, bg=BG_COLOR)
+            row.pack(fill=tk.X, padx=10, pady=5)
+            tk.Label(row, text=label, width=20, anchor=tk.W, bg=BG_COLOR).pack(side=tk.LEFT)
+            tk.Label(row, text=value, bg=BG_COLOR).pack(side=tk.LEFT)
+        
+        # 4. Trends tab (simple line chart)
+        try:
+            import matplotlib.pyplot as plt
+            from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+            
+            trends_frame = tk.Frame(notebook, bg=BG_COLOR)
+            notebook.add(trends_frame, text="Trends")
+            
+            dates = [row['day'].strftime('%m-%d') for row in report_data['daily_trend']]
+            amounts = [float(row['daily_revenue']) for row in report_data['daily_trend']]
+            
+            fig = plt.Figure(figsize=(8, 4), dpi=100)
+            ax = fig.add_subplot(111)
+            ax.plot(dates, amounts, marker='o')
+            ax.set_title("Daily Revenue Trend")
+            ax.set_ylabel("Revenue ($)")
+            ax.grid(True)
+            
+            # Rotate date labels if many dates
+            if len(dates) > 7:
+                plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+            
+            canvas = FigureCanvasTkAgg(fig, master=trends_frame)
+            canvas.draw()
+            canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            
+        except ImportError:
+            tk.Label(trends_frame, text="Matplotlib required for charts", bg=BG_COLOR).pack()
+    
+    # Report frame
+    report_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    report_frame.pack(fill=tk.BOTH, expand=True)
+    
     # Generate button
-    gen_btn = tk.Button(main_frame, text="Generate Report", command=generate)
-    apply_styles(gen_btn)
-    gen_btn.pack(pady=10)
-   
+    generate_btn = tk.Button(header_frame, text="Generate Report", command=generate_report)
+    apply_styles(generate_btn)
+    generate_btn.pack(side=tk.RIGHT, padx=10)
+    
+    # Generate initial report
+    report_window.after(100, generate_report)
+
+
+def get_room_statistics_gui(conn):
+    """GUI for displaying room utilization statistics"""
+    stats_window = tk.Toplevel()
+    stats_window.title("Room Utilization Report")
+    stats_window.geometry("900x600")
+    stats_window.config(bg=BG_COLOR)
+    center_window(stats_window)
+    
+    # Main container
+    main_frame = tk.Frame(stats_window, bg=BG_COLOR)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    
+    # Title
+    tk.Label(main_frame, text="Room Utilization Statistics", 
+            font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=(0, 20))
+    
+    # Get data
+    success, stats_data = get_room_utilization_stats(conn)
+    if not success:
+        messagebox.showerror("Error", stats_data)
+        stats_window.destroy()
+        return
+    
+    # Notebook for multiple tabs
+    notebook = ttk.Notebook(main_frame)
+    notebook.pack(fill=tk.BOTH, expand=True)
+    
+    # 1. Overall Stats tab
+    overall_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(overall_frame, text="Overview")
+    
+    overall_stats = [
+        ("Total Rooms", stats_data['overall']['total_rooms']),
+        ("Occupied Rooms", f"{stats_data['overall']['occupied_rooms']} ({stats_data['overall']['occupied_rooms']/stats_data['overall']['total_rooms']*100:.1f}%)"),
+        ("Available Rooms", stats_data['overall']['available_rooms']),
+        ("Maintenance Rooms", stats_data['overall']['maintenance_rooms']),
+        ("Average Stay Duration", f"{stats_data['stay_stats']['avg_stay_days']:.1f} days")
+    ]
+    
+    for label, value in overall_stats:
+        row = tk.Frame(overall_frame, bg=BG_COLOR)
+        row.pack(fill=tk.X, padx=10, pady=5)
+        tk.Label(row, text=label, width=25, anchor=tk.W, bg=BG_COLOR).pack(side=tk.LEFT)
+        tk.Label(row, text=value, bg=BG_COLOR).pack(side=tk.LEFT)
+    
+    # 2. Department Stats tab
+    dept_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(dept_frame, text="By Department")
+    
+    columns = ("Department", "Total Rooms", "Occupied", "Occupancy Rate")
+    tree = ttk.Treeview(dept_frame, columns=columns, show='headings')
+    
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=120, anchor=tk.CENTER if col != "Department" else tk.W)
+    
+    for dept in stats_data['by_department']:
+        tree.insert("", tk.END, values=(
+            dept['DepartmentName'],
+            dept['total_rooms'],
+            dept['occupied'],
+            f"{dept['occupancy_rate']}%"
+        ))
+    
+    tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # 3. Revenue by Type tab
+    revenue_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(revenue_frame, text="Revenue by Type")
+    
+    columns = ("Room Type", "Room Count", "Total Revenue")
+    tree = ttk.Treeview(revenue_frame, columns=columns, show='headings')
+    
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=120, anchor=tk.CENTER if col != "Room Type" else tk.W)
+    
+    for room_type in stats_data['revenue_by_type']:
+        tree.insert("", tk.END, values=(
+            room_type['TypeName'],
+            room_type['room_count'],
+            f"${room_type['total_revenue']:,.2f}" if room_type['total_revenue'] else "$0.00"
+        ))
+    
+    tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # Add export button
+    def export_to_csv():
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            title="Save report as CSV"
+        )
+        if file_path:
+            try:
+                with open(file_path, 'w', newline='') as csvfile:
+                    writer = csv.writer(csvfile)
+                    
+                    # Write overall stats
+                    writer.writerow(["Room Utilization Report - Overall Statistics"])
+                    for label, value in overall_stats:
+                        writer.writerow([label, value])
+                    
+                    writer.writerow([])
+                    writer.writerow(["By Department"])
+                    writer.writerow(columns[:4])  # Department columns
+                    for dept in stats_data['by_department']:
+                        writer.writerow([
+                            dept['DepartmentName'],
+                            dept['total_rooms'],
+                            dept['occupied'],
+                            f"{dept['occupancy_rate']}%"
+                        ])
+                    
+                    writer.writerow([])
+                    writer.writerow(["Revenue by Room Type"])
+                    writer.writerow(columns)  # Revenue columns
+                    for room_type in stats_data['revenue_by_type']:
+                        writer.writerow([
+                            room_type['TypeName'],
+                            room_type['room_count'],
+                            f"${room_type['total_revenue']:,.2f}" if room_type['total_revenue'] else "$0.00"
+                        ])
+                
+                messagebox.showinfo("Success", f"Report exported to {file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to export: {str(e)}")
+    
+    export_btn = tk.Button(main_frame, text="Export to CSV", command=export_to_csv)
+    apply_styles(export_btn)
+    export_btn.pack(pady=10)
+
+
+def generate_statistics_gui(conn):
+    """GUI for generating hospital statistics report"""
+    stats_window = tk.Toplevel()
+    stats_window.title("Hospital Statistics Report")
+    stats_window.geometry("1000x700")
+    stats_window.config(bg=BG_COLOR)
+    center_window(stats_window)
+    
+    # Main container
+    main_frame = tk.Frame(stats_window, bg=BG_COLOR)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+    
+    # Title
+    tk.Label(main_frame, text="Hospital Statistics Report", 
+            font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=(0, 20))
+    
+    # Get data
+    success, stats_data = get_hospital_statistics(conn)
+    if not success:
+        messagebox.showerror("Error", stats_data)
+        stats_window.destroy()
+        return
+    
+    # Notebook for multiple tabs
+    notebook = ttk.Notebook(main_frame)
+    notebook.pack(fill=tk.BOTH, expand=True)
+    
+    # 1. Patient Demographics tab
+    patient_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(patient_frame, text="Patient Demographics")
+    
+    patient_stats = [
+        ("Total Patients", stats_data['patient_demographics']['total_patients']),
+        ("Male Patients", f"{stats_data['patient_demographics']['male_patients']} ({stats_data['patient_demographics']['male_patients']/stats_data['patient_demographics']['total_patients']*100:.1f}%)"),
+        ("Female Patients", f"{stats_data['patient_demographics']['female_patients']} ({stats_data['patient_demographics']['female_patients']/stats_data['patient_demographics']['total_patients']*100:.1f}%)"),
+        ("Other Gender", f"{stats_data['patient_demographics']['other_patients']} ({stats_data['patient_demographics']['other_patients']/stats_data['patient_demographics']['total_patients']*100:.1f}%)"),
+        ("Average Age", f"{stats_data['patient_demographics']['avg_age']:.1f} years")
+    ]
+    
+    for label, value in patient_stats:
+        row = tk.Frame(patient_frame, bg=BG_COLOR)
+        row.pack(fill=tk.X, padx=10, pady=5)
+        tk.Label(row, text=label, width=25, anchor=tk.W, bg=BG_COLOR).pack(side=tk.LEFT)
+        tk.Label(row, text=value, bg=BG_COLOR).pack(side=tk.LEFT)
+    
+    # 2. Doctor Productivity tab
+    doctor_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(doctor_frame, text="Doctor Productivity")
+    
+    columns = ("Doctor", "Appointments", "Prescriptions", "Admissions")
+    tree = ttk.Treeview(doctor_frame, columns=columns, show='headings')
+    
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=120, anchor=tk.CENTER if col != "Doctor" else tk.W)
+    
+    for doctor in stats_data['doctor_productivity']:
+        tree.insert("", tk.END, values=(
+            doctor['DoctorName'],
+            doctor['appointment_count'],
+            doctor['prescription_count'],
+            doctor['admission_count']
+        ))
+    
+    tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # 3. Service Utilization tab
+    service_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(service_frame, text="Service Utilization")
+    
+    columns = ("Service", "Count", "Revenue")
+    tree = ttk.Treeview(service_frame, columns=columns, show='headings')
+    
+    for col in columns:
+        tree.heading(col, text=col)
+        tree.column(col, width=120, anchor=tk.CENTER if col != "Service" else tk.W)
+    
+    for service in stats_data['service_utilization']:
+        tree.insert("", tk.END, values=(
+            service['ServiceName'],
+            service['service_count'],
+            f"${service['total_revenue']:,.2f}"
+        ))
+    
+    tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # 4. Appointment Metrics tab
+    appt_frame = tk.Frame(notebook, bg=BG_COLOR)
+    notebook.add(appt_frame, text="Appointment Metrics")
+    
+    appt_stats = [
+        ("Total Appointments", stats_data['appointment_metrics']['total_appointments']),
+        ("Completed", f"{stats_data['appointment_metrics']['completed']} ({stats_data['appointment_metrics']['completed']/stats_data['appointment_metrics']['total_appointments']*100:.1f}%)"),
+        ("Cancelled", f"{stats_data['appointment_metrics']['cancelled']} ({stats_data['appointment_metrics']['cancelled']/stats_data['appointment_metrics']['total_appointments']*100:.1f}%)"),
+        ("Scheduled", f"{stats_data['appointment_metrics']['scheduled']} ({stats_data['appointment_metrics']['scheduled']/stats_data['appointment_metrics']['total_appointments']*100:.1f}%)"),
+        ("Average Duration", f"{stats_data['appointment_metrics']['avg_duration_minutes']:.1f} minutes")
+    ]
+    
+    for label, value in appt_stats:
+        row = tk.Frame(appt_frame, bg=BG_COLOR)
+        row.pack(fill=tk.X, padx=10, pady=5)
+        tk.Label(row, text=label, width=25, anchor=tk.W, bg=BG_COLOR).pack(side=tk.LEFT)
+        tk.Label(row, text=value, bg=BG_COLOR).pack(side=tk.LEFT)
+    
+    # Refresh button
+    def refresh_data():
+        success, new_stats_data = get_hospital_statistics(conn)
+        if success:
+            # Update all views with new data
+            update_statistics_views(new_stats_data)
+        else:
+            messagebox.showerror("Error", new_stats_data)
+    
+    refresh_btn = tk.Button(main_frame, text="Refresh Data", command=refresh_data)
+    apply_styles(refresh_btn)
+    refresh_btn.pack(pady=10)
+    
+    def update_statistics_views(new_data):
+        """Helper function to update all views with fresh data"""
+        # Update patient demographics
+        for i, (label, _) in enumerate(patient_stats):
+            new_value = ""
+            if label == "Total Patients":
+                new_value = new_data['patient_demographics']['total_patients']
+            elif label == "Male Patients":
+                total = new_data['patient_demographics']['total_patients']
+                male = new_data['patient_demographics']['male_patients']
+                new_value = f"{male} ({male/total*100:.1f}%)"
+            elif label == "Female Patients":
+                total = new_data['patient_demographics']['total_patients']
+                female = new_data['patient_demographics']['female_patients']
+                new_value = f"{female} ({female/total*100:.1f}%)"
+            elif label == "Other Gender":
+                total = new_data['patient_demographics']['total_patients']
+                other = new_data['patient_demographics']['other_patients']
+                new_value = f"{other} ({other/total*100:.1f}%)"
+            elif label == "Average Age":
+                new_value = f"{new_data['patient_demographics']['avg_age']:.1f} years"
+            
+            # Update the label in the frame
+            patient_frame.winfo_children()[i].winfo_children()[1].config(text=new_value)
+        
+        # Update doctor productivity
+        tree = doctor_frame.winfo_children()[0]
+        tree.delete(*tree.get_children())
+        for doctor in new_data['doctor_productivity']:
+            tree.insert("", tk.END, values=(
+                doctor['DoctorName'],
+                doctor['appointment_count'],
+                doctor['prescription_count'],
+                doctor['admission_count']
+            ))
+        
+        # Update service utilization
+        tree = service_frame.winfo_children()[0]
+        tree.delete(*tree.get_children())
+        for service in new_data['service_utilization']:
+            tree.insert("", tk.END, values=(
+                service['ServiceName'],
+                service['service_count'],
+                f"${service['total_revenue']:,.2f}"
+            ))
+        
+        # Update appointment metrics
+        for i, (label, _) in enumerate(appt_stats):
+            new_value = ""
+            if label == "Total Appointments":
+                new_value = new_data['appointment_metrics']['total_appointments']
+            elif label == "Completed":
+                total = new_data['appointment_metrics']['total_appointments']
+                completed = new_data['appointment_metrics']['completed']
+                new_value = f"{completed} ({completed/total*100:.1f}%)"
+            elif label == "Cancelled":
+                total = new_data['appointment_metrics']['total_appointments']
+                cancelled = new_data['appointment_metrics']['cancelled']
+                new_value = f"{cancelled} ({cancelled/total*100:.1f}%)"
+            elif label == "Scheduled":
+                total = new_data['appointment_metrics']['total_appointments']
+                scheduled = new_data['appointment_metrics']['scheduled']
+                new_value = f"{scheduled} ({scheduled/total*100:.1f}%)"
+            elif label == "Average Duration":
+                new_value = f"{new_data['appointment_metrics']['avg_duration_minutes']:.1f} minutes"
+            
+            # Update the label in the frame
+            appt_frame.winfo_children()[i].winfo_children()[1].config(text=new_value)
 def change_password_gui(conn, username):
     """GUI for changing password"""
     change_window = tk.Toplevel()
@@ -5980,7 +9041,7 @@ def main():
     
     # Title
     title_label = tk.Label(
-        main_frame,
+       main_frame,
         text="Hospital Management System",
         font=TITLE_FONT,
         bg=BG_COLOR,

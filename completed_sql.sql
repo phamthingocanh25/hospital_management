@@ -32,10 +32,11 @@ CREATE TABLE Patients (
     Gender ENUM('M', 'F', 'O') NULL COMMENT 'M: Male, F: Female, O: Other',
     Address VARCHAR(255) NULL,
     PhoneNumber VARCHAR(20) NULL UNIQUE COMMENT 'Số điện thoại nên là duy nhất',
-    Status ENUM('active', 'disabled') DEFAULT 'active'
+    Status VARCHAR(20) DEFAULT 'Active' COMMENT 'e.g., Active, Inpatient, Discharged, Disabled'
 ) COMMENT = 'Thông tin cơ bản của bệnh nhân';
 
 -- Bảng Bác sĩ (Doctors)
+DROP TABLE IF EXISTS Doctors;
 CREATE TABLE Doctors (
     DoctorID INT AUTO_INCREMENT PRIMARY KEY,
     DoctorName VARCHAR(100) NOT NULL,
@@ -55,9 +56,9 @@ CREATE TABLE Medicine (
     MedicineID INT AUTO_INCREMENT PRIMARY KEY,
     MedicineName VARCHAR(150) NOT NULL UNIQUE COMMENT 'Tên thuốc',
     Unit VARCHAR(50) DEFAULT 'Viên' COMMENT 'Đơn vị tính (Viên, Lọ, Tuýp, Hộp)',
-    Quantity INT NOT NULL DEFAULT 0 CHECK (Quantity >= 0) COMMENT 'Số lượng tồn kho',
-    MedicineCost DECIMAL(10, 2) NOT NULL CHECK (MedicineCost >= 0) COMMENT 'Giá mỗi đơn vị thuốc'
-) COMMENT = 'Quản lý kho thuốc';
+    Quantity INT NOT NULL DEFAULT 0 CHECK (Quantity >= 0) COMMENT 'Số lượng tồn kho tổng cộng',
+    MedicineCost DECIMAL(10, 2) NOT NULL CHECK (MedicineCost >= 0) COMMENT 'Giá mỗi đơn vị thuốc (tham khảo, giá thực tế có thể theo lô)'
+) COMMENT = 'Quản lý thông tin thuốc và tổng tồn kho';
 
 -- Bảng quản lý kho thuốc (MedicineBatch)
 DROP TABLE IF EXISTS MedicineBatch;
@@ -65,14 +66,14 @@ CREATE TABLE MedicineBatch (
     BatchID INT AUTO_INCREMENT PRIMARY KEY,
     MedicineID INT NOT NULL,
     BatchNumber VARCHAR(100) NOT NULL,
-    Quantity INT NOT NULL,
+    Quantity INT NOT NULL CHECK (Quantity >=0),
     ImportDate DATE NOT NULL,
     ExpiryDate DATE NOT NULL,
     SupplierName VARCHAR(100) NOT NULL,
-    MedicineCost DECIMAL(10, 2) NOT NULL,
-    Status ENUM('Active', 'Discontinued') DEFAULT 'Active',
-    FOREIGN KEY (MedicineID) REFERENCES Medicine(MedicineID)
-);
+    MedicineCost DECIMAL(10, 2) NOT NULL COMMENT 'Giá nhập của lô thuốc này',
+    Status ENUM('Active', 'Discontinued', 'Expired', 'UsedUp') DEFAULT 'Active',
+    FOREIGN KEY (MedicineID) REFERENCES Medicine(MedicineID) ON DELETE RESTRICT ON UPDATE CASCADE
+) COMMENT = 'Quản lý chi tiết các lô thuốc nhập kho';
 
 -- Bảng Kho vật tư (Inventory)
 CREATE TABLE Inventory (
@@ -88,7 +89,7 @@ CREATE TABLE users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     username VARCHAR(50) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL COMMENT 'Store hashed passwords only!',
-    role ENUM('admin', 'doctor', 'receptionist', 'accountant') NOT NULL,
+    role  VARCHAR(30) NOT NULL,
     FullName VARCHAR(100) NULL,
     Email VARCHAR(100) NULL UNIQUE,
     IsActive BOOLEAN DEFAULT TRUE,
@@ -96,7 +97,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT = 'Quản lý tài khoản đăng nhập hệ thống';
 
--- Bảng Hóa đơn (Invoices) - Added PaymentStatus
+-- Bảng Hóa đơn (Invoices)
 CREATE TABLE Invoices (
     InvoiceID INT AUTO_INCREMENT PRIMARY KEY,
     PatientID INT NULL COMMENT 'ID bệnh nhân liên kết (NULL nếu bệnh nhân bị xóa)',
@@ -121,7 +122,7 @@ CREATE TABLE Invoices (
     CHECK (AmountPaid >= 0)
 ) COMMENT = 'Lưu trữ thông tin hóa đơn chi tiết của bệnh nhân';
 
--- Bảng Dịch vụ (Services) - Modified to link optionally to Invoice
+-- Bảng Dịch vụ (Services)
 CREATE TABLE Services (
     ServiceID INT AUTO_INCREMENT PRIMARY KEY,
     ServiceName VARCHAR(150) NOT NULL COMMENT 'Tên dịch vụ (Xét nghiệm máu, Chụp X-quang, Khám chuyên khoa)',
@@ -130,7 +131,7 @@ CREATE TABLE Services (
     Description TEXT NULL COMMENT 'Mô tả chi tiết dịch vụ'
 ) COMMENT = 'Danh mục các dịch vụ y tế bệnh viện cung cấp và chi phí';
 
--- Bảng Chi tiết Dịch vụ sử dụng (PatientServices) - Linking Patients, Services, and optionally Invoices
+-- Bảng Chi tiết Dịch vụ sử dụng (PatientServices)
 CREATE TABLE PatientServices (
     PatientServiceID INT AUTO_INCREMENT PRIMARY KEY,
     PatientID INT NOT NULL,
@@ -143,11 +144,10 @@ CREATE TABLE PatientServices (
     Notes TEXT NULL,
 
     FOREIGN KEY (PatientID) REFERENCES Patients(PatientID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (ServiceID) REFERENCES Services(ServiceID) ON DELETE RESTRICT ON UPDATE CASCADE, -- Không xóa dịch vụ gốc nếu đã có người dùng
+    FOREIGN KEY (ServiceID) REFERENCES Services(ServiceID) ON DELETE RESTRICT ON UPDATE CASCADE,
     FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE SET NULL ON UPDATE CASCADE,
     FOREIGN KEY (InvoiceID) REFERENCES Invoices(InvoiceID) ON DELETE SET NULL ON UPDATE CASCADE
 ) COMMENT = 'Ghi lại các dịch vụ cụ thể đã cung cấp cho bệnh nhân';
-
 
 -- Bảng Phòng bệnh (Rooms)
 CREATE TABLE Rooms (
@@ -182,7 +182,7 @@ CREATE TABLE EmergencyContact (
     FOREIGN KEY (PatientID) REFERENCES Patients(PatientID) ON DELETE CASCADE ON UPDATE CASCADE
 ) COMMENT = 'Thông tin liên hệ khẩn cấp của bệnh nhân';
 
--- Bảng Bảo hiểm (Insurance) - Using the detailed structure
+-- Bảng Bảo hiểm (Insurance)
 CREATE TABLE Insurance (
     InsuranceRecordID INT AUTO_INCREMENT PRIMARY KEY,
     PatientID INT NOT NULL,
@@ -192,14 +192,10 @@ CREATE TABLE Insurance (
     EffectiveDate DATE NOT NULL COMMENT 'Ngày bắt đầu hiệu lực',
     EndDate DATE NOT NULL COMMENT 'Ngày hết hạn hiệu lực',
     CoverageDetails TEXT NULL COMMENT 'Mô tả phạm vi bảo hiểm chung',
-    -- Removed CoveragePercent as it's too simplistic. Coverage varies by service type.
-    -- Coverage should ideally be checked dynamically against Service Costs & Insurance rules.
 
     FOREIGN KEY (PatientID) REFERENCES Patients(PatientID)
         ON DELETE CASCADE -- Nếu xóa bệnh nhân, xóa luôn thông tin bảo hiểm
         ON UPDATE CASCADE
-
-    -- CHECK (CoveragePercent >= 0 AND CoveragePercent <= 100) -- Removed this check
 ) COMMENT = 'Lưu thông tin các gói bảo hiểm của bệnh nhân';
 
 -- Bảng Lịch hẹn (Appointments)
@@ -215,11 +211,10 @@ CREATE TABLE Appointments (
     UpdatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
     FOREIGN KEY (PatientID) REFERENCES Patients(PatientID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE CASCADE ON UPDATE CASCADE, -- Or RESTRICT depending on policy
+    FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE CASCADE ON UPDATE CASCADE,
 
     UNIQUE KEY uk_appointment_slot (DoctorID, AppointmentDate, AppointmentTime) COMMENT 'Đảm bảo bác sĩ không bị trùng lịch tại cùng thời điểm'
 ) COMMENT = 'Quản lý lịch hẹn khám của bệnh nhân với bác sĩ';
-
 
 -- Bảng Đơn thuốc (Prescription)
 CREATE TABLE Prescription (
@@ -233,11 +228,10 @@ CREATE TABLE Prescription (
 
     FOREIGN KEY (AppointmentID) REFERENCES Appointments(AppointmentID) ON DELETE SET NULL ON UPDATE CASCADE,
     FOREIGN KEY (PatientID) REFERENCES Patients(PatientID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE RESTRICT ON UPDATE CASCADE -- Không xóa bác sĩ nếu đã kê đơn
-
+    FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE RESTRICT ON UPDATE CASCADE
 ) COMMENT = 'Thông tin chung về một đơn thuốc';
 
--- Bảng Chi tiết Đơn thuốc (PrescriptionDetails) - Links Prescription with Medicine
+-- Bảng Chi tiết Đơn thuốc (PrescriptionDetails)
 CREATE TABLE PrescriptionDetails (
     PrescriptionDetailID INT AUTO_INCREMENT PRIMARY KEY,
     PrescriptionID INT NOT NULL,
@@ -249,20 +243,57 @@ CREATE TABLE PrescriptionDetails (
     QuantityPrescribed INT NOT NULL CHECK (QuantityPrescribed > 0) COMMENT 'Số lượng thuốc được kê',
 
     FOREIGN KEY (PrescriptionID) REFERENCES Prescription(PrescriptionID) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY (MedicineID) REFERENCES Medicine(MedicineID) ON DELETE RESTRICT ON UPDATE CASCADE -- Không xóa thuốc nếu đã được kê
+    FOREIGN KEY (MedicineID) REFERENCES Medicine(MedicineID) ON DELETE RESTRICT ON UPDATE CASCADE
 ) COMMENT = 'Chi tiết các loại thuốc trong một đơn thuốc';
 
+-- Bảng Phiếu nhập viện (AdmissionOrders)
+CREATE TABLE AdmissionOrders (
+    AdmissionOrderID INT AUTO_INCREMENT PRIMARY KEY,
+    PatientID INT NOT NULL,
+    DoctorID INT NOT NULL,
+    DepartmentID INT NOT NULL,
+    OrderDate DATE NOT NULL,
+    Reason TEXT NOT NULL,
+    Notes TEXT NULL,
+    Status VARCHAR(20) NOT NULL DEFAULT 'Pending' COMMENT 'e.g., Pending, Processed, Cancelled',
+    ProcessedByUserID INT NULL COMMENT 'FK to users table (ID of receptionist/admin who processed)',
+    ProcessedDate DATETIME NULL,
+    AssignedRoomID INT NULL COMMENT 'FK to Rooms table',
+    FOREIGN KEY (PatientID) REFERENCES Patients(PatientID) ON DELETE CASCADE,
+    FOREIGN KEY (DoctorID) REFERENCES Doctors(DoctorID) ON DELETE RESTRICT,
+    FOREIGN KEY (DepartmentID) REFERENCES Departments(DepartmentID) ON DELETE RESTRICT,
+    FOREIGN KEY (ProcessedByUserID) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (AssignedRoomID) REFERENCES Rooms(RoomID) ON DELETE SET NULL
+) COMMENT = 'Quản lý phiếu yêu cầu nhập viện';
 
--- Create Indexes for Performance Optimization
+-- Bảng Điều chỉnh kho (Adjustments)
+CREATE TABLE Adjustments (
+    AdjustmentID INT AUTO_INCREMENT PRIMARY KEY,
+    InventoryID INT NULL COMMENT 'Liên kết vật tư (nếu điều chỉnh vật tư)',
+    BatchID INT NULL COMMENT 'Liên kết lô thuốc (nếu điều chỉnh thuốc)',
+    AdjustmentType ENUM('IN', 'OUT', 'ADJUST') NOT NULL COMMENT 'Loại điều chỉnh: Nhập/Xuất/Điều chỉnh',
+    QuantityChanged INT NOT NULL COMMENT 'Số lượng thay đổi (+/-)',
+    AdjustmentDate DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ChangedBy VARCHAR(100) NOT NULL COMMENT 'Người thực hiện (username hoặc userID)',
+    Reason TEXT NULL COMMENT 'Lý do điều chỉnh',
 
+    FOREIGN KEY (InventoryID) REFERENCES Inventory(InventoryID)
+        ON DELETE SET NULL ON UPDATE CASCADE, -- Or RESTRICT if adjustment history relies on inventory item existence
+    FOREIGN KEY (BatchID) REFERENCES MedicineBatch(BatchID)
+        ON DELETE SET NULL ON UPDATE CASCADE -- Or RESTRICT if adjustment history relies on batch existence
+) COMMENT = 'Lịch sử điều chỉnh tồn kho vật tư và thuốc';
+
+-- Index Creation
 -- Patients
 CREATE INDEX idx_patient_name ON Patients(PatientName);
 CREATE INDEX idx_patient_phone ON Patients(PhoneNumber);
+CREATE INDEX idx_patient_status ON Patients(Status);
 
 -- Doctors
 CREATE INDEX idx_doctor_name ON Doctors(DoctorName);
 CREATE INDEX idx_doctor_dept ON Doctors(DepartmentID);
 CREATE INDEX idx_doctor_user ON Doctors(DoctorUser);
+CREATE INDEX idx_doctor_status ON Doctors(status);
 
 -- Appointments
 CREATE INDEX idx_appointment_patient ON Appointments(PatientID);
@@ -285,6 +316,7 @@ CREATE INDEX idx_emergencycontact_patient ON EmergencyContact(PatientID);
 
 -- Inventory
 CREATE INDEX idx_inventory_itemname ON Inventory(ItemName);
+CREATE INDEX idx_inventory_status ON Inventory(Status);
 
 -- Rooms
 CREATE INDEX idx_rooms_status ON Rooms(Status);
@@ -296,8 +328,11 @@ CREATE INDEX idx_rooms_patient ON Rooms(CurrentPatientID);
 CREATE INDEX idx_medicine_name ON Medicine(MedicineName);
 
 -- MedicineBatch
-CREATE INDEX idx_medicineid ON MedicineBatch(MedicineID);
-CREATE INDEX idx_batchnumber ON MedicineBatch(BatchNumber);
+CREATE INDEX idx_medicinebatch_medicineid ON MedicineBatch(MedicineID);
+CREATE INDEX idx_medicinebatch_batchnumber ON MedicineBatch(BatchNumber);
+CREATE INDEX idx_medicinebatch_expirydate ON MedicineBatch(ExpiryDate);
+CREATE INDEX idx_medicinebatch_status ON MedicineBatch(Status);
+
 
 -- Services
 CREATE INDEX idx_services_name ON Services(ServiceName);
@@ -322,7 +357,21 @@ CREATE INDEX idx_prescriptiondetail_medicine ON PrescriptionDetails(MedicineID);
 -- Users
 CREATE INDEX idx_user_role ON users(role);
 CREATE INDEX idx_user_email ON users(Email);
+CREATE INDEX idx_user_isactive ON users(IsActive);
 
+-- AdmissionOrders
+CREATE INDEX idx_admission_status ON AdmissionOrders(Status);
+CREATE INDEX idx_admission_patient ON AdmissionOrders(PatientID);
+CREATE INDEX idx_admission_doctor ON AdmissionOrders(DoctorID);
+CREATE INDEX idx_admission_department ON AdmissionOrders(DepartmentID);
+CREATE INDEX idx_admission_orderdate ON AdmissionOrders(OrderDate);
+
+
+-- Adjustments
+CREATE INDEX idx_adjustment_date ON Adjustments(AdjustmentDate);
+CREATE INDEX idx_adjustment_type ON Adjustments(AdjustmentType);
+CREATE INDEX idx_adjustment_batch ON Adjustments(BatchID);
+CREATE INDEX idx_adjustment_inventory ON Adjustments(InventoryID);
 
 -- Advanced Database Objects (Views, Stored Procedures, Functions, Triggers)
 
@@ -337,10 +386,12 @@ SELECT
     a.AppointmentDate,
     a.AppointmentTime,
     a.Status AS AppointmentStatus,
-    a.Reason
+    a.Reason,
+    dept.DepartmentName
 FROM Appointments a
 JOIN Doctors d ON a.DoctorID = d.DoctorID
 JOIN Patients p ON a.PatientID = p.PatientID
+LEFT JOIN Departments dept ON d.DepartmentID = dept.DepartmentID
 WHERE a.AppointmentDate = CURDATE()
 ORDER BY a.AppointmentTime;
 
@@ -351,30 +402,71 @@ SELECT
     r.RoomNumber,
     rt.TypeName AS RoomType,
     d.DepartmentName,
-    rt.BaseCost
+    rt.BaseCost,
+    r.Status
 FROM Rooms r
 JOIN RoomTypes rt ON r.RoomTypeID = rt.RoomTypeID
 JOIN Departments d ON r.DepartmentID = d.DepartmentID
 WHERE r.Status = 'Available';
 
+DROP VIEW IF EXISTS vw_MedicineBatchDetails;
 CREATE VIEW vw_MedicineBatchDetails AS
-SELECT 
+SELECT
     mb.BatchID,
     m.MedicineName,
     mb.BatchNumber,
-    mb.Quantity,
+    mb.Quantity AS BatchQuantity,
     mb.ImportDate,
     mb.ExpiryDate,
     mb.SupplierName,
-    mb.Status
-FROM 
+    mb.MedicineCost AS BatchCost,
+    mb.Status AS BatchStatus,
+    m.Unit AS MedicineUnit,
+    m.Quantity AS TotalMedicineStock -- From Medicine table
+FROM
     MedicineBatch mb
-JOIN Medicine m ON mb.MedicineID = m.MedicineID
+JOIN Medicine m ON mb.MedicineID = m.MedicineID;
 
 
--- 2. Stored Procedures
+-- 2. Functions
 
--- SP to get appointments for a specific doctor
+DROP FUNCTION IF EXISTS fn_CalculateTotalRevenuePaid;
+DELIMITER //
+CREATE FUNCTION fn_CalculateTotalRevenuePaid(p_start_date DATE, p_end_date DATE)
+RETURNS DECIMAL(16,2)
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE total_revenue DECIMAL(16,2);
+
+    SELECT SUM(AmountPaid) INTO total_revenue
+    FROM Invoices
+    WHERE InvoiceDate BETWEEN p_start_date AND p_end_date
+      AND PaymentStatus = 'Paid';
+
+    RETURN IFNULL(total_revenue, 0.00);
+END //
+DELIMITER ;
+
+DROP FUNCTION IF EXISTS fn_GetTotalStockByMedicine;
+DELIMITER //
+CREATE FUNCTION fn_GetTotalStockByMedicine(p_medicine_id INT)
+RETURNS INT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE total_quantity INT;
+    SELECT SUM(Quantity) INTO total_quantity
+    FROM MedicineBatch
+    WHERE MedicineID = p_medicine_id AND Status = 'Active' AND ExpiryDate >= CURDATE(); -- Only active, non-expired batches
+    RETURN IFNULL(total_quantity, 0);
+END //
+DELIMITER ;
+
+
+-- 3. Stored Procedures
+
+DROP PROCEDURE IF EXISTS sp_GetDoctorAppointments;
 DELIMITER //
 CREATE PROCEDURE sp_GetDoctorAppointments(IN p_doctor_id INT, IN p_start_date DATE, IN p_end_date DATE)
 BEGIN
@@ -383,7 +475,7 @@ BEGIN
         p.PatientName,
         a.AppointmentDate,
         a.AppointmentTime,
-        a.Status,
+        a.Status AS AppointmentStatus,
         a.Reason
     FROM Appointments a
     JOIN Patients p ON a.PatientID = p.PatientID
@@ -393,9 +485,6 @@ BEGIN
 END //
 DELIMITER ;
 
--- SP to create an initial invoice shell (details added separately)
--- This is simplified. Real-world invoice creation often involves complex logic
--- summing up various costs (rooms, services, medicine) potentially via triggers or application logic.
 DROP PROCEDURE IF EXISTS sp_CreateInvoiceForPatient;
 DELIMITER //
 CREATE PROCEDURE sp_CreateInvoiceForPatient(
@@ -403,60 +492,67 @@ CREATE PROCEDURE sp_CreateInvoiceForPatient(
     OUT p_new_invoice_id INT
 )
 BEGIN
-    -- Check if PatientID is valid
-    IF EXISTS (SELECT 1 FROM Patients WHERE PatientID = p_patient_id) THEN
-        INSERT INTO Invoices (PatientID, InvoiceDate, TotalAmount, PaymentStatus)
-        VALUES (p_patient_id, CURDATE(), 0.00, 'Unpaid'); -- Start with 0 total, Unpaid status
-
-        SET p_new_invoice_id = LAST_INSERT_ID();
-    ELSE
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Invalid PatientID provided.';
+    IF NOT EXISTS (SELECT 1 FROM Patients WHERE PatientID = p_patient_id AND Status != 'Disabled') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid or Inactive PatientID provided.';
         SET p_new_invoice_id = NULL;
+    ELSE
+        INSERT INTO Invoices (PatientID, InvoiceDate, TotalAmount, RoomCost, MedicineCost, ServiceCost, PaymentStatus)
+        VALUES (p_patient_id, CURDATE(), 0.00, 0.00, 0.00, 0.00, 'Unpaid');
+        SET p_new_invoice_id = LAST_INSERT_ID();
     END IF;
 END //
 DELIMITER ;
 
--- SP to add a service to a patient and potentially link to an invoice
 DROP PROCEDURE IF EXISTS sp_AddPatientService;
 DELIMITER //
 CREATE PROCEDURE sp_AddPatientService(
     IN p_patient_id INT,
     IN p_service_id INT,
-    IN p_doctor_id INT, -- Can be NULL if not applicable
+    IN p_doctor_id INT, -- Can be NULL
     IN p_quantity INT,
-    IN p_invoice_id INT -- Can be NULL if not invoicing immediately
+    IN p_invoice_id INT -- Can be NULL
 )
 BEGIN
     DECLARE v_service_cost DECIMAL(10,2);
     DECLARE v_cost_at_time DECIMAL(10,2);
+    DECLARE v_patient_exists BOOLEAN;
+    DECLARE v_service_exists BOOLEAN;
+    DECLARE v_doctor_exists_or_null BOOLEAN;
 
-    -- Get the current cost of the service
-    SELECT ServiceCost INTO v_service_cost FROM Services WHERE ServiceID = p_service_id;
+    SELECT EXISTS(SELECT 1 FROM Patients WHERE PatientID = p_patient_id) INTO v_patient_exists;
+    SELECT EXISTS(SELECT 1 FROM Services WHERE ServiceID = p_service_id) INTO v_service_exists;
+    SET v_doctor_exists_or_null = (p_doctor_id IS NULL OR EXISTS(SELECT 1 FROM Doctors WHERE DoctorID = p_doctor_id));
 
-    IF v_service_cost IS NOT NULL THEN
+    IF NOT v_patient_exists THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid PatientID provided.';
+    ELSEIF NOT v_service_exists THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid ServiceID provided.';
+    ELSEIF NOT v_doctor_exists_or_null THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid DoctorID provided.';
+    ELSE
+        SELECT ServiceCost INTO v_service_cost FROM Services WHERE ServiceID = p_service_id;
         SET v_cost_at_time = v_service_cost * p_quantity;
 
-        -- Insert the service usage record
         INSERT INTO PatientServices (PatientID, ServiceID, DoctorID, ServiceDate, Quantity, CostAtTime, InvoiceID)
         VALUES (p_patient_id, p_service_id, p_doctor_id, NOW(), p_quantity, v_cost_at_time, p_invoice_id);
 
-        -- If an invoice ID is provided, update the invoice's service cost and total amount
         IF p_invoice_id IS NOT NULL THEN
-            UPDATE Invoices
-            SET ServiceCost = ServiceCost + v_cost_at_time,
-                TotalAmount = TotalAmount + v_cost_at_time -- Assuming TotalAmount reflects sum before payment
-            WHERE InvoiceID = p_invoice_id;
+            IF EXISTS (SELECT 1 FROM Invoices WHERE InvoiceID = p_invoice_id) THEN
+                UPDATE Invoices
+                SET ServiceCost = ServiceCost + v_cost_at_time,
+                    TotalAmount = RoomCost + MedicineCost + (ServiceCost + v_cost_at_time) -- Recalculate total
+                WHERE InvoiceID = p_invoice_id;
+            ELSE
+                 -- Optionally handle if invoice ID is provided but doesn't exist, though FK constraint should catch this if PatientServices.InvoiceID is not NULL
+                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Provided InvoiceID does not exist for updating costs.';
+            END IF;
         END IF;
-    ELSE
-        SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Invalid ServiceID provided.';
     END IF;
 END //
 DELIMITER ;
 
+DROP PROCEDURE IF EXISTS sp_AddMedicineBatch;
 DELIMITER //
-
 CREATE PROCEDURE sp_AddMedicineBatch(
     IN p_medicine_id INT,
     IN p_batch_number VARCHAR(100),
@@ -467,52 +563,23 @@ CREATE PROCEDURE sp_AddMedicineBatch(
     IN p_medicine_cost DECIMAL(10, 2)
 )
 BEGIN
-    INSERT INTO MedicineBatch (MedicineID, BatchNumber, Quantity, ImportDate, ExpiryDate, SupplierName, MedicineCost)
-    VALUES (p_medicine_id, p_batch_number, p_quantity, p_import_date, p_expiry_date, p_supplier_name, p_medicine_cost);
-END //
-
-DELIMITER ;
-
-
--- 3. Functions
-
--- Function to calculate total revenue within a date range for PAID invoices
-DROP FUNCTION IF EXISTS fn_CalculateTotalRevenuePaid;
-DELIMITER //
-CREATE FUNCTION fn_CalculateTotalRevenuePaid(start_date DATE, end_date DATE)
-RETURNS DECIMAL(16,2)
-DETERMINISTIC
-READS SQL DATA
-BEGIN
-    DECLARE total DECIMAL(16,2);
-
-    SELECT SUM(AmountPaid) INTO total -- Sum what was actually paid
-    FROM Invoices
-    WHERE InvoiceDate BETWEEN start_date AND end_date
-      AND PaymentStatus = 'Paid'; -- Consider only fully paid invoices
-
-    RETURN IFNULL(total, 0.00);
+    IF NOT EXISTS (SELECT 1 FROM Medicine WHERE MedicineID = p_medicine_id) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Invalid MedicineID provided.';
+    ELSEIF p_quantity <= 0 THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Quantity must be positive.';
+    ELSEIF p_expiry_date < p_import_date THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Expiry date cannot be before import date.';
+    ELSE
+        INSERT INTO MedicineBatch (MedicineID, BatchNumber, Quantity, ImportDate, ExpiryDate, SupplierName, MedicineCost, Status)
+        VALUES (p_medicine_id, p_batch_number, p_quantity, p_import_date, p_expiry_date, p_supplier_name, p_medicine_cost, 'Active');
+        -- The trg_UpdateStockAfterInsert trigger will update Medicine.Quantity and log to Adjustments
+    END IF;
 END //
 DELIMITER ;
 
-DELIMITER //
-
-CREATE FUNCTION fn_GetTotalStockByMedicine(p_medicine_id INT) 
-RETURNS INT
-DETERMINISTIC
-BEGIN
-    DECLARE total_quantity INT;
-    SELECT SUM(Quantity) INTO total_quantity
-    FROM MedicineBatch
-    WHERE MedicineID = p_medicine_id AND Status = 'Active';  -- Lọc theo trạng thái active
-    RETURN IFNULL(total_quantity, 0);
-END //
-
-DELIMITER ;
 
 -- 4. Triggers
 
--- Trigger to prevent double booking (using the unique key is often preferred, but trigger provides custom message)
 DROP TRIGGER IF EXISTS trg_PreventDoubleBooking;
 DELIMITER //
 CREATE TRIGGER trg_PreventDoubleBooking
@@ -524,45 +591,107 @@ BEGIN
         WHERE DoctorID = NEW.DoctorID
           AND AppointmentDate = NEW.AppointmentDate
           AND AppointmentTime = NEW.AppointmentTime
-          AND Status != 'Cancelled' -- Don't count cancelled slots
+          AND Status != 'Cancelled' AND Status != 'No Show' -- Consider existing active appointments
     ) THEN
         SIGNAL SQLSTATE '45000'
-        SET MESSAGE_TEXT = 'Doctor already has a non-cancelled appointment scheduled at this specific date and time.';
+        SET MESSAGE_TEXT = 'Bác sĩ đã có lịch hẹn khác (không phải trạng thái Cancelled/No Show) vào thời điểm này.';
     END IF;
 END //
 DELIMITER ;
 
--- Trigger to update medicine stock when prescribed (VERY SIMPLISTIC - assumes stock is available)
--- A more robust system would check stock BEFORE allowing prescription detail insertion or have a separate dispensing step.
-DROP TRIGGER IF EXISTS trg_UpdateMedicinetockOnPrescribe;
-DELIMITER //
-CREATE TRIGGER trg_UpdateMedicinetockOnPrescribe
-AFTER INSERT ON PrescriptionDetails
-FOR EACH ROW
-BEGIN
-    UPDATE Medicine
-    SET Quantity = Quantity - NEW.QuantityPrescribed
-    WHERE MedicineID = NEW.MedicineID;
-    -- WARNING: This doesn't check if Quantity goes below 0! Add checks or handle dispensing separately.
-END //
-DELIMITER ;
 
+DROP TRIGGER IF EXISTS trg_UpdateStockAfterInsertBatch; -- Renamed for clarity from generic "trg_UpdateStockAfterInsert"
 DELIMITER //
-
-CREATE TRIGGER trg_UpdateStockAfterInsert
+CREATE TRIGGER trg_UpdateStockAfterInsertBatch
 AFTER INSERT ON MedicineBatch
 FOR EACH ROW
 BEGIN
+    -- Update total quantity in Medicine table
     UPDATE Medicine
     SET Quantity = Quantity + NEW.Quantity
     WHERE MedicineID = NEW.MedicineID;
-END //
 
+    -- Log the adjustment for the new batch
+    INSERT INTO Adjustments (BatchID, AdjustmentType, QuantityChanged, ChangedBy, Reason)
+    VALUES (NEW.BatchID, 'IN', NEW.Quantity, USER(), CONCAT('Nhập lô thuốc mới: ', NEW.BatchNumber));
+END //
 DELIMITER ;
+
+
+DROP TRIGGER IF EXISTS trg_UpdateMedicineStockOnPrescribe;
+DELIMITER //
+CREATE TRIGGER trg_UpdateMedicineStockOnPrescribe
+AFTER INSERT ON PrescriptionDetails
+FOR EACH ROW
+BEGIN
+    DECLARE v_selected_batch_id INT DEFAULT NULL;
+    DECLARE v_quantity_to_prescribe INT;
+    SET v_quantity_to_prescribe = NEW.QuantityPrescribed;
+
+    -- Update total quantity in Medicine table first
+    -- This assumes the prescription will succeed.
+    -- A check for overall stock in Medicine table could be done BEFORE this trigger, in application logic or another BEFORE trigger.
+    UPDATE Medicine
+    SET Quantity = Quantity - v_quantity_to_prescribe
+    WHERE MedicineID = NEW.MedicineID;
+
+    -- Check if Medicine quantity would go negative (basic check, more robust needed)
+    IF (SELECT Quantity FROM Medicine WHERE MedicineID = NEW.MedicineID) < 0 THEN
+         -- Rollback the master quantity update if it went negative (though this indicates a prior issue)
+         UPDATE Medicine SET Quantity = Quantity + v_quantity_to_prescribe WHERE MedicineID = NEW.MedicineID;
+         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Không đủ tổng số lượng thuốc trong kho (Medicine table).';
+    END IF;
+
+    -- Attempt to find a suitable active, non-expired batch with enough quantity
+    SELECT BatchID INTO v_selected_batch_id
+    FROM MedicineBatch
+    WHERE MedicineID = NEW.MedicineID
+      AND Status = 'Active'
+      AND ExpiryDate >= CURDATE()
+      AND Quantity >= v_quantity_to_prescribe
+    ORDER BY ExpiryDate ASC -- FIFO based on expiry, could also be ImportDate for true FIFO
+    LIMIT 1;
+
+    IF v_selected_batch_id IS NOT NULL THEN
+        -- Decrement the quantity in the chosen MedicineBatch
+        UPDATE MedicineBatch
+        SET Quantity = Quantity - v_quantity_to_prescribe
+        WHERE BatchID = v_selected_batch_id;
+
+        -- Log the adjustment referencing the specific batch
+        INSERT INTO Adjustments (BatchID, AdjustmentType, QuantityChanged, ChangedBy, Reason)
+        VALUES (v_selected_batch_id, 'OUT', -v_quantity_to_prescribe, USER(),
+                CONCAT('Xuất theo đơn thuốc ID: ', NEW.PrescriptionID, ', Chi tiết ID: ', NEW.PrescriptionDetailID));
+        
+        -- If batch quantity becomes zero, update its status
+        IF (SELECT Quantity FROM MedicineBatch WHERE BatchID = v_selected_batch_id) = 0 THEN
+            UPDATE MedicineBatch SET Status = 'UsedUp' WHERE BatchID = v_selected_batch_id;
+        END IF;
+    ELSE
+        -- No single suitable batch found.
+        -- This is a critical issue: total stock was decremented, but no batch could fulfill it.
+        -- This indicates a mismatch or need for more complex logic (e.g., splitting prescription over batches or erroring out earlier).
+        -- For now, log an adjustment without a specific BatchID or with a note.
+        -- Ideally, the transaction should fail here if medicine cannot be sourced from a specific batch.
+        -- Reverting the initial Medicine.Quantity update:
+         UPDATE Medicine SET Quantity = Quantity + v_quantity_to_prescribe WHERE MedicineID = NEW.MedicineID;
+         SIGNAL SQLSTATE '45000'
+         SET MESSAGE_TEXT = 'Không tìm thấy lô thuốc phù hợp (đủ số lượng, còn hạn, active) để xuất kho. Kê đơn thất bại.';
+
+        -- Fallback logging if strict failure is not desired (NOT RECOMMENDED without further logic):
+        /*
+        INSERT INTO Adjustments (InventoryID, BatchID, AdjustmentType, QuantityChanged, ChangedBy, Reason)
+        VALUES (NULL, NULL, 'OUT', -v_quantity_to_prescribe, USER(),
+                CONCAT('Xuất theo đơn thuốc ID: ', NEW.PrescriptionID, ', Chi tiết ID: ', NEW.PrescriptionDetailID, ' - LƯU Ý: Không xác định được lô cụ thể hoặc lô không đủ.'));
+        */
+    END IF;
+END //
+DELIMITER ;
+
 
 -- 5. Database Security and Administration
 
--- Drop existing users if they exist (for script re-runnability during development)
+-- Drop existing users if they exist
 DROP USER IF EXISTS 'admin_hms'@'localhost';
 DROP USER IF EXISTS 'doctor_hms'@'localhost';
 DROP USER IF EXISTS 'receptionist_hms'@'localhost';
@@ -572,15 +701,15 @@ DROP USER IF EXISTS 'nurse_hms'@'localhost';
 DROP USER IF EXISTS 'warehouse_manager_hms'@'localhost';
 DROP USER IF EXISTS 'director_hms'@'localhost';
 
--- Create users with strong passwords (replace 'strong_password_X'!)
-CREATE USER 'admin_hms'@'localhost' IDENTIFIED BY 'strong_password_admin';
-CREATE USER 'doctor_hms'@'localhost' IDENTIFIED BY 'strong_password_doctor';
-CREATE USER 'receptionist_hms'@'localhost' IDENTIFIED BY 'strong_password_recept';
-CREATE USER 'accountant_hms'@'localhost' IDENTIFIED BY 'strong_password_account';
-CREATE USER 'pharmacist_hms'@'localhost' IDENTIFIED BY 'strong_password_pharmacist';
-CREATE USER 'warehouse_manager_hms'@'localhost' IDENTIFIED BY 'strong_password_warehouse';
-CREATE USER 'nurse_hms'@'localhost' IDENTIFIED BY 'strong_password_nurse';
-CREATE USER 'director_hms'@'localhost' IDENTIFIED BY 'strong_password_director';
+-- Create users with strong passwords (replace 'strong_password_X' with actual strong passwords)
+CREATE USER 'admin_hms'@'localhost' IDENTIFIED BY 'AdminHMS!2025Pass';
+CREATE USER 'doctor_hms'@'localhost' IDENTIFIED BY 'DoctorHMS!2025Pass';
+CREATE USER 'receptionist_hms'@'localhost' IDENTIFIED BY 'ReceptHMS!2025Pass';
+CREATE USER 'accountant_hms'@'localhost' IDENTIFIED BY 'AccountHMS!2025Pass';
+CREATE USER 'pharmacist_hms'@'localhost' IDENTIFIED BY 'PharmHMS!2025Pass';
+CREATE USER 'warehouse_manager_hms'@'localhost' IDENTIFIED BY 'WarehouseHMS!2025Pass';
+CREATE USER 'nurse_hms'@'localhost' IDENTIFIED BY 'NurseHMS!2025Pass';
+CREATE USER 'director_hms'@'localhost' IDENTIFIED BY 'DirectorHMS!2025Pass';
 
 -- Grant Privileges
 -- Admin: Full control
@@ -588,72 +717,102 @@ GRANT ALL PRIVILEGES ON hospitalmanagementsystem.* TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'admin_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddMedicineBatch TO 'admin_hms'@'localhost';
 GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'admin_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_GetTotalStockByMedicine TO 'admin_hms'@'localhost';
 
--- Doctor: Read patient, their appointments, manage prescriptions, read medicine/services/insurance/rooms
+-- Director: Full overview, similar to admin but might have some restrictions in a real scenario. For now, same as admin for simplicity.
+GRANT ALL PRIVILEGES ON hospitalmanagementsystem.* TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddMedicineBatch TO 'director_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'director_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_GetTotalStockByMedicine TO 'director_hms'@'localhost';
+
+-- Doctor:
 GRANT SELECT ON hospitalmanagementsystem.Patients TO 'doctor_hms'@'localhost';
-GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Appointments -- Needs application logic to filter by own DoctorID for SELECT/UPDATE
-    TO 'doctor_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE (Status, Reason) ON hospitalmanagementsystem.Appointments TO 'doctor_hms'@'localhost'; -- App logic should filter to own appointments for UPDATE
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Prescription TO 'doctor_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.PrescriptionDetails TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Medicine TO 'doctor_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.MedicineBatch TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Services TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Insurance TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.EmergencyContact TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Rooms TO 'doctor_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.RoomTypes TO 'doctor_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Departments TO 'doctor_hms'@'localhost';
-GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'doctor_hms'@'localhost'; -- View services provided
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'doctor_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'doctor_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.AdmissionOrders TO 'doctor_hms'@'localhost'; -- Doctors can create/update admission orders
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'doctor_hms'@'localhost'; -- To see user details if needed (e.g. who processed order)
 
--- Receptionist: Manage patients, appointments, rooms, contacts, insurance. Read doctors/departments.
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'doctor_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_GetTotalStockByMedicine TO 'doctor_hms'@'localhost';
+
+-- Receptionist:
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Patients TO 'receptionist_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Appointments TO 'receptionist_hms'@'localhost';
-GRANT SELECT, UPDATE ON hospitalmanagementsystem.Rooms TO 'receptionist_hms'@'localhost'; -- Update status, assign patient
+GRANT SELECT, UPDATE (Status, CurrentPatientID, LastCleanedDate) ON hospitalmanagementsystem.Rooms TO 'receptionist_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE ON hospitalmanagementsystem.EmergencyContact TO 'receptionist_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE ON hospitalmanagementsystem.Insurance TO 'receptionist_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Doctors TO 'receptionist_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Departments TO 'receptionist_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.RoomTypes TO 'receptionist_hms'@'localhost';
-GRANT SELECT ON hospitalmanagementsystem.Services TO 'receptionist_hms'@'localhost'; -- To know available services
-GRANT SELECT, INSERT ON hospitalmanagementsystem.PatientServices TO 'receptionist_hms'@'localhost'; -- Record basic service usage maybe? Or just view? Adjust as needed.
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'receptionist_hms'@'localhost'; -- To check doctor schedules
+GRANT SELECT ON hospitalmanagementsystem.Services TO 'receptionist_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.PatientServices TO 'receptionist_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE (Status, ProcessedByUserID, ProcessedDate, AssignedRoomID, Notes) ON hospitalmanagementsystem.AdmissionOrders TO 'receptionist_hms'@'localhost';
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'receptionist_hms'@'localhost'; -- To set ProcessedByUserID
 
--- Accountant: Manage invoices. Read patients(limited), services, medicine, rooms, insurance for billing.
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'receptionist_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'receptionist_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'receptionist_hms'@'localhost';
+
+-- Accountant:
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Invoices TO 'accountant_hms'@'localhost';
-GRANT SELECT (PatientID, PatientName, Address, PhoneNumber) ON hospitalmanagementsystem.Patients TO 'accountant_hms'@'localhost'; -- Limited patient view
+GRANT SELECT (PatientID, PatientName, Address, PhoneNumber, Status) ON hospitalmanagementsystem.Patients TO 'accountant_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.Services TO 'accountant_hms'@'localhost';
-GRANT SELECT ON hospitalmanagementsystem.Medicine TO 'accountant_hms'@'localhost'; -- Read costs
-GRANT SELECT ON hospitalmanagementsystem.Rooms TO 'accountant_hms'@'localhost'; -- Read room costs via RoomTypes join
-GRANT SELECT ON hospitalmanagementsystem.RoomTypes TO 'accountant_hms'@'localhost';
-GRANT SELECT ON hospitalmanagementsystem.Insurance TO 'accountant_hms'@'localhost'; -- For coverage calculation logic (in app)
-GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'accountant_hms'@'localhost'; -- To verify services billed
+GRANT SELECT ON hospitalmanagementsystem.Medicine TO 'accountant_hms'@'localhost'; -- For costs
+GRANT SELECT ON hospitalmanagementsystem.MedicineBatch TO 'accountant_hms'@'localhost'; -- For batch specific costs if needed
+GRANT SELECT ON hospitalmanagementsystem.Rooms TO 'accountant_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.RoomTypes TO 'accountant_hms'@'localhost'; -- For room costs
+GRANT SELECT ON hospitalmanagementsystem.Insurance TO 'accountant_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'accountant_hms'@'localhost';
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'accountant_hms'@'localhost';
+
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'accountant_hms'@'localhost';
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'accountant_hms'@'localhost'; -- Can add services to invoice
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'accountant_hms'@'localhost';
 GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'accountant_hms'@'localhost';
 
--- Pharmacist: Manage Medicine, batches, and inventory.
+-- Pharmacist:
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Medicine TO 'pharmacist_hms'@'localhost';
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.MedicineBatch TO 'pharmacist_hms'@'localhost';
-GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Inventory TO 'pharmacist_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.Prescription TO 'pharmacist_hms'@'localhost'; -- View prescriptions
+GRANT SELECT ON hospitalmanagementsystem.PrescriptionDetails TO 'pharmacist_hms'@'localhost'; -- View prescription details
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Adjustments TO 'pharmacist_hms'@'localhost'; -- Pharmacists will also adjust stock
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'pharmacist_hms'@'localhost';
+
 GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddMedicineBatch TO 'pharmacist_hms'@'localhost';
+GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_GetTotalStockByMedicine TO 'pharmacist_hms'@'localhost';
 
--- Warehouse Manager: Manage inventory.
+
+-- Warehouse Manager (for non-medicine inventory):
 GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Inventory TO 'warehouse_manager_hms'@'localhost';
+GRANT SELECT, INSERT, UPDATE ON hospitalmanagementsystem.Adjustments TO 'warehouse_manager_hms'@'localhost'; -- For inventory items
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'warehouse_manager_hms'@'localhost';
 
--- Nurse: Assist doctors, view appointments, patient records.
+-- Nurse:
 GRANT SELECT ON hospitalmanagementsystem.Patients TO 'nurse_hms'@'localhost';
-GRANT SELECT, UPDATE ON hospitalmanagementsystem.Appointments TO 'nurse_hms'@'localhost';
+GRANT SELECT, UPDATE (Status, Reason) ON hospitalmanagementsystem.Appointments TO 'nurse_hms'@'localhost'; -- Update status (e.g., completed)
 GRANT SELECT ON hospitalmanagementsystem.Prescription TO 'nurse_hms'@'localhost';
 GRANT SELECT ON hospitalmanagementsystem.PrescriptionDetails TO 'nurse_hms'@'localhost';
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'nurse_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.Doctors TO 'nurse_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.Rooms TO 'nurse_hms'@'localhost';
+GRANT SELECT ON hospitalmanagementsystem.PatientServices TO 'nurse_hms'@'localhost'; -- View services done
+GRANT SELECT ON hospitalmanagementsystem.AdmissionOrders TO 'nurse_hms'@'localhost'; -- View admission orders
+GRANT SELECT (username, FullName, role, id) ON hospitalmanagementsystem.users TO 'nurse_hms'@'localhost';
 
--- Director: Full overview of hospital operations and reports.
-GRANT ALL PRIVILEGES ON hospitalmanagementsystem.* TO 'director_hms'@'localhost';
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'director_hms'@'localhost';
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_CreateInvoiceForPatient TO 'director_hms'@'localhost';
-GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_AddPatientService TO 'director_hms'@'localhost';
-GRANT EXECUTE ON FUNCTION hospitalmanagementsystem.fn_CalculateTotalRevenuePaid TO 'director_hms'@'localhost';
+GRANT EXECUTE ON PROCEDURE hospitalmanagementsystem.sp_GetDoctorAppointments TO 'nurse_hms'@'localhost';
 
 -- Apply the permission changes
 FLUSH PRIVILEGES;
-
