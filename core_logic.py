@@ -19,7 +19,7 @@ load_dotenv()
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'anh@2502'),
+    'password': os.getenv('DB_PASSWORD', 'MaiAnh<3'),
     'database': os.getenv('DB_NAME', 'hospitalmanagementsystem'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
@@ -598,7 +598,7 @@ def initialize_admin():
 # User Management
 def register_user(conn, username, password, confirm_password, role):
     """Register user from GUI input"""
-    valid_roles = ["admin", "doctor", "receptionist", "nurse", "director", "pharmacist", "inventory_manager"]
+    valid_roles = ["admin", "doctor", "receptionist", "accountant", "nurse", "director", "pharmacist", "inventory_manager"]
 
     if role.lower() not in valid_roles:
         return False, f"❌ Unsupported role: '{role}'. Allowed roles: {', '.join(valid_roles)}"
@@ -693,6 +693,8 @@ def add_doctor(conn, name, dept_id, specialization, username):
 
     try:
         with conn.cursor() as cursor:
+            if not all([name, dept_id, specialization, username]):
+                return False, "All fields are required."
             # Check if department exists
             cursor.execute("SELECT DepartmentID FROM Departments WHERE DepartmentID = %s", (dept_id,))
             if not cursor.fetchone():
@@ -775,10 +777,13 @@ def assign_doctor_user(conn, doctor_id, username, password=None):
     """Tạo user mới, băm mật khẩu và gán cho bác sĩ"""
     try:
         with conn.cursor() as cursor:
-            # Check if doctor exists
-            cursor.execute("SELECT DoctorID FROM Doctors WHERE DoctorID = %s", (doctor_id,))
-            if not cursor.fetchone():
-                 return False, "❌ Doctor ID not found."
+            # Check if doctor exists and doesn't have a username assigned
+            cursor.execute("SELECT DoctorID, DoctorUser FROM Doctors WHERE DoctorID = %s", (doctor_id,))
+            doctor = cursor.fetchone()
+            if not doctor:
+                return False, "❌ Doctor ID not found."
+            if doctor['DoctorUser']:
+                return False, f"❌ Doctor already has a username assigned: {doctor['DoctorUser']}."
 
             # Kiểm tra xem username đã tồn tại chưa
             cursor.execute("SELECT username FROM Users WHERE username = %s", (username,))
@@ -992,7 +997,7 @@ def add_patient(conn, name, date_of_birth, gender, address, phone_number):
         conn.rollback()
         return False, f"❌ Failed to add patient: {e}"
 
-def search_patient(conn, patient_id=None, name=None):
+def search_patients(conn, patient_id=None, name=None):
     """Search for a patient by ID or name"""
     try:
         with conn.cursor() as cursor:
@@ -1324,18 +1329,18 @@ def add_room(conn, room_number, room_type_id, department_id, status="Available")
     """Add a new room to the system"""
     try:
         with conn.cursor() as cursor:
-            if not room_number:
-                return False, "❌ Room number cannot be empty."
+            if not all([room_number, room_type_id, department_id]):
+                return False, "All categories are required."
             
             # Kiểm tra xem loại phòng có tồn tại không
             cursor.execute("SELECT RoomTypeID FROM RoomTypes WHERE RoomTypeID = %s", (room_type_id,))
             if not cursor.fetchone():
-                return False, "❌ Room type does not exist."
+                return False, "Room type does not exist."
 
             # Kiểm tra xem khoa có tồn tại không
             cursor.execute("SELECT DepartmentID FROM Departments WHERE DepartmentID = %s", (department_id,))
             if not cursor.fetchone():
-                return False, "❌ Department does not exist."
+                return False, "Department does not exist."
             
             # Thêm phòng mới
             cursor.execute("""
@@ -1501,7 +1506,14 @@ def get_room_statistics(conn):
 def assign_patient_to_room(conn, patient_id, room_type_id):
     """Gán bệnh nhân vào phòng trống đầu tiên của loại phòng chỉ định"""
     try:
+        if not patient_id or not room_type_id:
+            return False, "All fields are required."
         with conn.cursor() as cursor:
+            # Check if patient exists
+            cursor.execute("SELECT PatientID FROM Patients WHERE PatientID = %s", (patient_id,))
+            if not cursor.fetchone():
+                return False, "Patient not found."
+            
             # Tìm phòng trống
             cursor.execute("""
                 SELECT RoomID FROM Rooms 
@@ -1671,20 +1683,18 @@ def search_services(conn, service_id=None, service_name=None):
    
 # PatientService Management
 def add_patient_service(conn, patient_id, service_id, doctor_id, service_date, quantity, cost_at_time, notes):
-    """Thêm dịch vụ cho bệnh nhân"""
     try:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                INSERT INTO PatientServices 
-                (PatientID, ServiceID, DoctorID, ServiceDate, Quantity, CostAtTime, Notes)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (patient_id, service_id, doctor_id, service_date, quantity, cost_at_time, notes))
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO PatientServices (PatientID, ServiceID, DoctorID, ServiceDate, Quantity, CostAtTime, Notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (patient_id, service_id, doctor_id, service_date, quantity, cost_at_time, notes)
+        )
         conn.commit()
-        return True, "✅ Service assigned to patient successfully."
+        return True, "Added"
     except Exception as e:
-        conn.rollback()
-        return False, f"❌ Failed to add service: {str(e)}"
-    
+        return False, str(e)
+        
 def delete_patient_service(conn, patient_service_id):
     """Delete a service from a patient's account"""
     try:
@@ -1699,11 +1709,11 @@ def delete_patient_service(conn, patient_service_id):
         return False, f"❌ Failed to delete patient service: {e}"
     
 def search_patient_services(conn, patient_id=None, patient_name=None):
-    """Search for all services used by a patient by ID or name."""
+    """Search for services used by a patient, filtered by ID or name."""
     try:
         with conn.cursor() as cursor:
             query = """
-                SELECT ps.PatientServiceID, s.ServiceName, ps.Quantity, s.ServiceCost
+                SELECT ps.PatientServiceID, p.PatientName, s.ServiceName, ps.ServiceDate, ps.Quantity, s.ServiceCost
                 FROM PatientServices ps
                 JOIN Services s ON ps.ServiceID = s.ServiceID
                 JOIN Patients p ON ps.PatientID = p.PatientID
@@ -1711,19 +1721,18 @@ def search_patient_services(conn, patient_id=None, patient_name=None):
             """
             params = []
 
-            if patient_id:
+            if patient_id and patient_name:
+                query += " AND p.PatientID = %s AND p.PatientName ILIKE %s"
+                params.extend([patient_id, f"%{patient_name}%"])
+            elif patient_id:
                 query += " AND p.PatientID = %s"
                 params.append(patient_id)
-            if patient_name:
-                query += " AND p.PatientName LIKE %s"
+            elif patient_name:
+                query += " AND p.PatientName ILIKE %s"
                 params.append(f"%{patient_name}%")
 
             cursor.execute(query, tuple(params))
-            results = cursor.fetchall()
-
-            if not results:
-                return False, "⚠️ No patient services found with the provided criteria."
-            return True, results
+            return True, cursor.fetchall()
 
     except Exception as e:
         return False, f"❌ Error fetching patient services: {e}"
@@ -2057,24 +2066,48 @@ def add_medicine_batch(conn, medicine_id, batch_number, quantity, import_date, e
         conn.rollback()
         return False, f"❌ Failed to add medicine batch: {e}"
 
-def update_medicine_batch(conn, batch_id, quantity, status):
-    """Update a medicine batch's quantity and status"""
+def update_medicine_batch(conn, batch_id, medicine_id=None, batch_number=None,
+                          expiry_date=None, quantity=None, cost=None):
+    """Update medicine batch fields selectively."""
     try:
         with conn.cursor() as cursor:
-            if not batch_id or not any([quantity, status]):
-                return False, "❌ Batch ID and at least one other field must be provided."
-            # Kiểm tra xem lô thuốc có tồn tại không
+            if not batch_id:
+                return False, "❌ Batch ID is required."
+
             cursor.execute("SELECT BatchID FROM MedicineBatch WHERE BatchID = %s", (batch_id,))
             if not cursor.fetchone():
                 return False, "❌ Medicine batch not found."
 
-            # Cập nhật lô thuốc
-            cursor.execute("""
-                UPDATE MedicineBatch 
-                SET Quantity = %s, Status = %s 
-                WHERE BatchID = %s
-            """, (quantity, status, batch_id))
+            fields = []
+            values = []
 
+            if medicine_id:
+                fields.append("MedicineID = %s")
+                values.append(medicine_id)
+            if batch_number:
+                fields.append("BatchNumber = %s")
+                values.append(batch_number)
+            if expiry_date:
+                fields.append("ExpiryDate = %s")
+                values.append(expiry_date)
+            if quantity is not None:
+                fields.append("Quantity = %s")
+                values.append(quantity)
+            if cost is not None:
+                fields.append("MedicineCost = %s")
+                values.append(cost)
+
+            if not fields:
+                return False, "❌ No fields to update."
+
+            update_query = f"""
+                UPDATE MedicineBatch
+                SET {', '.join(fields)}
+                WHERE BatchID = %s
+            """
+            values.append(batch_id)
+
+            cursor.execute(update_query, tuple(values))
             conn.commit()
             return True, "✅ Medicine batch updated successfully."
     except MySQLError as e:
@@ -2171,32 +2204,36 @@ def add_inventory_item(conn, item_name, quantity, unit, status='active'):
     try:
         with conn.cursor() as cursor:
             # Ensure all required fields are provided
-            if not item_name or not quantity or not unit or not status:
-                return False, "❌ All fields are required."
+            if not item_name or not quantity or not unit:
+                return False, "Item name, unit and quantity are required."
             
             cursor.execute("""
             INSERT INTO Inventory (itemName, quantity, unit, status)
             VALUES (%s, %s, %s, %s)
             """, (item_name, quantity, unit, status))
             conn.commit()
-            return True, "✅ Inventory item added successfully."
+            return True, "Inventory item added successfully."
     except MySQLError as e:
         conn.rollback()
-        return False, f"❌ Failed to add item: {e}"
+        return False, f"Failed to add item: {e}"
 
-def update_inventory_item(conn, inventory_id, item_name, quantity, unit, status):
-    try:
-        with conn.cursor() as cursor:
-            cursor.execute("""
-                UPDATE Inventory
-                SET itemName=%s, quantity=%s, unit=%s, status=%s
-                WHERE inventoryID = %s
-            """, (item_name, quantity, unit, status, inventory_id))
-            conn.commit()
-            return True, "✅ Inventory item updated."
-    except MySQLError as e:
-        conn.rollback()
-        return False, f"❌ Update failed: {e}"
+# def update_inventory_item(conn, inventory_id, item_name, quantity, unit, status):
+#     try:
+#         if not inventory_id:
+#             return False, "Please enter Inventory ID"
+#         if not any([item_name, quantity, unit, status]):
+#             return False, "At least one field except Inventory ID is required."
+#         with conn.cursor() as cursor:
+#             cursor.execute("""
+#                 UPDATE Inventory
+#                 SET itemName=%s, quantity=%s, unit=%s, status=%s
+#                 WHERE inventoryID = %s
+#             """, (item_name, quantity, unit, status, inventory_id))
+#             conn.commit()
+#             return True, "✅ Inventory item updated."
+#     except MySQLError as e:
+#         conn.rollback()
+#         return False, f"❌ Update failed: {e}"
 
 def disable_inventory_item(conn, inventory_id):
     try:
@@ -2557,7 +2594,7 @@ def create_detailed_invoice(conn, patient_id, prescription_id=None, room_id=None
         return False, f"Unexpected error creating invoice: {ex}", None
  
 def create_invoice(conn, patient_id, total_amount):
-    """Create an invoice for a patient with current date."""
+    """Create an invoice for a patient with current date and update invoiceID in PatientServices."""
     try:
         with conn.cursor() as cursor:
             # Kiểm tra bệnh nhân tồn tại
@@ -2567,16 +2604,28 @@ def create_invoice(conn, patient_id, total_amount):
 
             invoice_date = datetime.now().strftime("%Y-%m-%d")
 
+            # Tạo hóa đơn
             cursor.execute("""
                 INSERT INTO Invoices (PatientID, InvoiceDate, TotalAmount)
                 VALUES (%s, %s, %s)
             """, (patient_id, invoice_date, total_amount))
+            
+            # Lấy invoiceID vừa tạo
+            invoice_id = cursor.lastrowid
+
+            # Cập nhật invoiceID vào PatientServices
+            cursor.execute("""
+                UPDATE PatientServices
+                SET invoiceID = %s
+                WHERE PatientID = %s
+            """, (invoice_id, patient_id))
+
             conn.commit()
-            return True, "✅ Invoice created successfully."
+            return True, f"✅ Invoice created successfully with InvoiceID = {invoice_id}."
     except MySQLError as e:
         conn.rollback()
         return False, f"❌ Failed to create invoice: {e}"
-    
+   
 def view_invoices(conn, patient_id=None):
     """View invoices (all or for specific patient)"""
     try:
@@ -2643,22 +2692,83 @@ def calculate_discount_from_percentage(original_cost, percentage):
  
 # --- END ADDED FUNCTION ---
 
-def save_calculated_invoice(conn, patient_id, med_cost_orig, room_cost_orig, svc_cost_orig, total_discount, final_amount, notes):
+def get_statistical_report_data(conn):
+    """Fetch statistical data from the hospital database"""
+    try:
+        with conn.cursor(dictionary=True) as cursor:
+            # Tổng số bệnh nhân
+            cursor.execute("SELECT COUNT(*) AS total FROM Patients")
+            total_patients = cursor.fetchone()['total']
+
+            # Tổng số bác sĩ
+            cursor.execute("SELECT COUNT(*) AS total FROM Doctors")
+            total_doctors = cursor.fetchone()['total']
+
+            # Tổng số cuộc hẹn
+            cursor.execute("SELECT COUNT(*) AS total FROM Appointments")
+            total_appointments = cursor.fetchone()['total']
+
+            # Tổng số toa thuốc
+            cursor.execute("SELECT COUNT(*) AS total FROM Prescription")
+            total_prescriptions = cursor.fetchone()['total']
+
+            # Tổng số phòng bệnh
+            cursor.execute("SELECT COUNT(*) AS total FROM Rooms")
+            total_rooms = cursor.fetchone()['total']
+
+            # Tổng số dịch vụ
+            cursor.execute("SELECT COUNT(*) AS total FROM Services")
+            total_services = cursor.fetchone()['total']
+
+            # Phân bố bệnh nhân theo giới tính
+            cursor.execute("""
+                SELECT Gender, COUNT(*) AS count
+                FROM Patients
+                GROUP BY Gender
+            """)
+            gender_data = cursor.fetchall()
+            patient_gender_dist = {row['Gender']: row['count'] for row in gender_data}
+
+            # Số cuộc hẹn theo phòng ban
+            cursor.execute("""
+                SELECT d.DepartmentName, COUNT(*) AS appointment_count
+                FROM Appointments a
+                JOIN Doctors doc ON a.DoctorID = doc.DoctorID
+                JOIN Departments d ON doc.DepartmentID = d.DepartmentID
+                GROUP BY d.DepartmentName
+                ORDER BY appointment_count DESC
+            """)
+            appointments_per_department = cursor.fetchall()
+
+            return True, {
+                'total_patients': total_patients,
+                'total_doctors': total_doctors,
+                'total_appointments': total_appointments,
+                'total_prescriptions': total_prescriptions,
+                'total_rooms': total_rooms,
+                'total_services': total_services,
+                'patient_gender_dist': patient_gender_dist,
+                'appointments_per_department': appointments_per_department
+            }
+
+    except Exception as e:
+        return False, f"❌ Failed to fetch statistical data: {e}"
+
+
+def save_calculated_invoice(conn, patient_id, room_cost, med_cost, svc_cost, total_amount, notes, is_bhyt_applied):
     """Lưu hóa đơn đã được tính toán từ GUI vào cơ sở dữ liệu."""
     try:
         # Validate inputs
         p_id_int = int(patient_id)
-        med_cost_f = float(med_cost_orig)
-        room_cost_f = float(room_cost_orig)
-        svc_cost_f = float(svc_cost_orig)
-        discount_f = float(total_discount)
-        final_amount_f = float(final_amount)
+        med_cost_f = float(med_cost)
+        room_cost_f = float(room_cost)
+        svc_cost_f = float(svc_cost)
+        total_amount_f = float(total_amount)
 
         # Basic sanity check
-        if final_amount_f < 0:
+        if total_amount_f < 0:
             print("Warning: Final amount is negative. Saving as 0.00")
-            final_amount_f = 0.0
-        # Could add check: abs((med+room+svc) - discount - final) < tolerance
+            total_amount_f = 0.0
 
     except ValueError:
         return False, "Invalid numeric data for invoice amounts.", None
@@ -2666,25 +2776,20 @@ def save_calculated_invoice(conn, patient_id, med_cost_orig, room_cost_orig, svc
     try:
         with conn.cursor() as cursor:
             invoice_date = datetime.now().strftime("%Y-%m-%d")
-            is_bhyt_applied = discount_f > 0 # Simple check if any discount was applied
 
-            # Ensure Invoices table has these columns with appropriate types
-            # (e.g., MedicineCost, RoomCost, ServiceCost, ManualDiscount, TotalAmount, Notes)
             cursor.execute("""
                 INSERT INTO Invoices (
                     PatientID, InvoiceDate,
-                    MedicineCost, RoomCost, ServiceCost, /* Original costs */
-                    ManualDiscount, /* Store the calculated discount */
+                    RoomCost, MedicineCost, ServiceCost, /* Original costs */
                     TotalAmount, /* Final amount due */
+                    AmountPaid,
                     PaymentStatus, IsBHYTApplied, Notes
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 p_id_int, invoice_date,
-                med_cost_f, room_cost_f, svc_cost_f, # Store original costs
-                discount_f, # Store the manual discount applied
-                final_amount_f, # Store final amount
-                'Unpaid', # Default status
+                room_cost_f, med_cost_f, svc_cost_f, total_amount_f,
+                0, 'Unpaid', # Default status
                 is_bhyt_applied,
                 notes # Store the detailed bill text
             ))
@@ -2700,105 +2805,142 @@ def save_calculated_invoice(conn, patient_id, med_cost_orig, room_cost_orig, svc
         print(f"Unexpected error saving calculated invoice: {ex}")
         return False, f"Unexpected error: {ex}", None
 
+from fpdf import FPDF
+import os
+
+class InvoicePDF(FPDF):
+    def header(self):
+        self.set_font("DejaVu", "B", 12)
+        self.cell(0, 10, "INTERNATIONAL GENERAL HOSPITAL", 0, 0, "L")
+        self.cell(0, 7, f"Patient ID: {self.patient_id}", 0, 1, "R")
+
+        self.set_font("DejaVu", "", 11)
+        self.cell(0, 7, "Department: Reception", 0, 0, "L")
+        self.ln(5)
+        self.set_font("DejaVu", "B", 16)
+        self.cell(0, 10, "HOSPITAL INVOICE", 0, 1, "C")
+        self.ln(2)
+
 def generate_invoice_pdf(conn, invoice_id, output_path):
-    """Generate PDF invoice with professional layout"""
     try:
+        # Register DejaVu font
+        font_path='C:\\DMS\\prj_0205\\DejaVuSans.ttf'
+        if not os.path.exists(font_path):
+            return False, "DejaVu font not found. Please ensure DejaVuSans.ttf is available."
+        
+        pdf = InvoicePDF()
+        pdf.add_font("DejaVu", "", font_path, uni=True)
+        pdf.add_font("DejaVu", "B", font_path, uni=True)
+        pdf.add_font("DejaVu", "I", font_path, uni=True)
+        pdf.set_auto_page_break(auto=True, margin=15)
+
         with conn.cursor() as cursor:
-            # Get invoice details
             cursor.execute("""
-                SELECT i.*, p.PatientName, p.PhoneNumber, p.Address
+                SELECT i.*, p.PatientName, p.Gender, p.DateOfBirth, p.PhoneNumber, p.Address
                 FROM Invoices i
                 JOIN Patients p ON i.PatientID = p.PatientID
                 WHERE i.InvoiceID = %s
             """, (invoice_id,))
-            
             invoice = cursor.fetchone()
-            
-            if not invoice:
-                return False, "Invoice not found"
-            
-            # Get invoice items (simplified - in real system you'd have separate tables)
-            # This is just an example
-            
-            # Create PDF
-            pdf = FPDF()
-            pdf.add_page()
-            
-            # Header
-            pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "HOSPITAL INVOICE", 0, 1, "C")
-            pdf.ln(10)
-            
-            # Hospital info
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(0, 10, "Hospital Name: ABC General Hospital", 0, 1)
-            pdf.cell(0, 10, "Address: 123 Medical Street, City", 0, 1)
-            pdf.cell(0, 10, "Phone: (123) 456-7890", 0, 1)
-            pdf.ln(10)
-            
-            # Invoice info
-            pdf.set_font("Arial", "B", 14)
-            pdf.cell(0, 10, f"Invoice #{invoice_id}", 0, 1)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(0, 10, f"Date: {invoice['InvoiceDate']}", 0, 1)
-            pdf.ln(5)
-            
-            # Patient info
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Bill To:", 0, 1)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(0, 10, f"Patient: {invoice['PatientName']}", 0, 1)
-            pdf.cell(0, 10, f"Patient ID: {invoice['PatientID']}", 0, 1)
-            if invoice['Address']:
-                pdf.cell(0, 10, f"Address: {invoice['Address']}", 0, 1)
-            if invoice['PhoneNumber']:
-                pdf.cell(0, 10, f"Phone: {invoice['PhoneNumber']}", 0, 1)
-            pdf.ln(10)
-            
-            # Invoice items (simplified)
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(100, 10, "Description", 1, 0, "C")
-            pdf.cell(40, 10, "Amount (VND)", 1, 1, "C")
-            
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(100, 10, "Medical Services", 1, 0)
-            pdf.cell(40, 10, f"{invoice['TotalAmount']:,.2f}", 1, 1, "R")
-            
-            # Total
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(100, 10, "TOTAL", 1, 0, "R")
-            pdf.cell(40, 10, f"{invoice['TotalAmount']:,.2f}", 1, 1, "R")
-            pdf.ln(20)
-            
-            # Footer
-            pdf.set_font("Arial", "I", 10)
-            pdf.cell(0, 10, "Thank you for choosing our hospital!", 0, 1, "C")
-            pdf.cell(0, 10, "Please pay within 15 days", 0, 1, "C")
-            
-            pdf.output(output_path)
-            return True, f"Invoice PDF generated at {output_path}"
-            
+
+        if not invoice:
+            return False, "Invoice not found."
+
+        pdf.patient_id = invoice["PatientID"]
+        pdf.add_page()
+
+        # I. Patient Information
+        pdf.set_font("DejaVu", "B", 13)
+        pdf.cell(0, 10, "I. Patient Information", 0, 1)
+        pdf.set_font("DejaVu", "", 11)
+        pdf.cell(0, 8, f"Full Name: {invoice['PatientName']}", 0, 1)
+        pdf.cell(0, 8, f"Age: {calc_age(invoice['DateOfBirth'])}", 0, 1)
+        pdf.cell(0, 8, f"Gender: {invoice['Gender']}", 0, 1)
+        pdf.cell(0, 8, f"Address: {invoice['Address']}", 0, 1)
+        pdf.cell(0, 8, f"Phone Number: {invoice['PhoneNumber']}", 0, 1)
+        pdf.ln(5)
+
+        # II. Cost Table
+        pdf.set_font("DejaVu", "B", 13)
+        pdf.cell(0, 10, "II. Medical Service Charges", 0, 1)
+        # Truy vấn dịch vụ gắn với hóa đơn
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT i.Notes FROM Invoices i WHERE i.InvoiceID = %s
+            """, (invoice_id,))
+            result = cursor.fetchone()  # fetchone vì chỉ lấy 1 row
+        invoice_note = result['Notes'] if result and result['Notes'] else 'No note available'
+
+        pdf.set_font("DejaVu", "", 11)
+        for line in invoice_note.strip().split('\n'):
+            line_width = pdf.get_string_width(line)
+            page_width = pdf.w - 2 * pdf.l_margin
+            x_center = pdf.l_margin + (page_width - line_width) / 2
+            pdf.set_x(x_center)
+            pdf.cell(line_width, 8, line, ln=True)
+
+
+        # Signature Section
+        pdf.set_font("DejaVu", "", 11)
+
+        # Date aligned to right
+        date_text = f"Hanoi, {invoice['InvoiceDate'].strftime('%B %d, %Y')}"
+        date_text_width = pdf.get_string_width(date_text)
+        page_width = pdf.w - 2 * pdf.l_margin
+        x_align = pdf.l_margin + page_width - date_text_width
+
+        pdf.set_x(x_align)
+        pdf.cell(date_text_width, 5, date_text, 0, 1, "C")
+        pdf.ln()
+
+        # Signature labels aligned left and right
+        pdf.set_font("DejaVu", "B", 11)
+        signature_width = page_width / 2
+
+        pdf.cell(signature_width, 0, "Patient's Confirmation", 0, 0, "L")
+        pdf.cell(signature_width, 0, "Cashier's Confirmation", 0, 1, "R")
+        pdf.ln(30)
+
+        # Italic note centered
+        pdf.set_font("DejaVu", "I", 9)
+        pdf.multi_cell(0, 8, 
+            "Note: This receipt is only valid for issuing the invoice on the same day. "
+            "The hospital will not resolve any issues after the due date.", 0
+        )
+
+        pdf.output(output_path)
+        return True, f"Invoice PDF generated at {output_path}"
+
     except Exception as e:
         return False, f"Error generating invoice PDF: {e}"
+    
 # generate_prescription
+from fpdf import FPDF
+
+def calc_age(dob):
+    if isinstance(dob, str):
+        dob = datetime.strptime(dob, "%Y-%m-%d")
+    today = datetime.today()
+    age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+    return age
+
 def generate_prescription_pdf(conn, prescription_id, output_path):
-    """Tạo PDF đơn thuốc"""
+    """Tạo PDF đơn thuốc hỗ trợ Unicode"""
     try:
         with conn.cursor() as cursor:
             # Lấy thông tin đơn thuốc
             cursor.execute("""
-                SELECT p.*, doc.DoctorName, pat.PatientName, pat.DateOfBirth, pat.Gender
+                SELECT p.*, doc.DoctorName, pat.*
                 FROM Prescription p
                 JOIN Doctors doc ON p.DoctorID = doc.DoctorID
                 JOIN Patients pat ON p.PatientID = pat.PatientID
                 WHERE p.PrescriptionID = %s
             """, (prescription_id,))
-            
             prescription = cursor.fetchone()
-            
+
             if not prescription:
                 return False, "Prescription not found"
-                
+
             # Lấy chi tiết đơn thuốc
             cursor.execute("""
                 SELECT pd.*, m.MedicineName, m.Unit
@@ -2806,73 +2948,156 @@ def generate_prescription_pdf(conn, prescription_id, output_path):
                 JOIN Medicine m ON pd.MedicineID = m.MedicineID
                 WHERE pd.PrescriptionID = %s
             """, (prescription_id,))
-            
             details = cursor.fetchall()
-            
+
             # Tạo PDF
             pdf = FPDF()
             pdf.add_page()
-            
-            # Header
-            pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "HOSPITAL PRESCRIPTION", 0, 1, "C")
-            pdf.ln(10)
-            
-            # Patient info
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, f"Patient: {prescription['PatientName']}", 0, 1)
-            pdf.cell(0, 10, f"DOB: {prescription['DateOfBirth']}  Gender: {prescription['Gender']}", 0, 1)
+            pdf.add_font('DejaVu', '', 'C:\\DMS\\prj_0205\\DejaVuSans.ttf', uni=True)
+            pdf.add_font('DejaVu', 'B', 'C:\\DMS\\prj_0205\\DejaVuSans-Bold.ttf', uni=True)
+            pdf.set_font("DejaVu", "B", 16)
+
+            # Tên bệnh viện, mã điều trị, mã bệnh nhân
+            pdf.set_font("DejaVu", "B", 14)
+            pdf.cell(0, 10, "INTERNATIONAL GENERAL HOSPITAL", 0, 1, "C")
+            pdf.set_font("DejaVu", "", 11)
+            pdf.cell(0, 7, f"Treatment Code: {prescription['PrescriptionID']}    Patient ID: {prescription['PatientID']}", 0, 1, "C")
             pdf.ln(5)
-            
-            # Doctor info
-            pdf.cell(0, 10, f"Doctor: {prescription['DoctorName']}", 0, 1)
-            pdf.cell(0, 10, f"Date: {prescription['PrescriptionDate']}", 0, 1)
-            pdf.ln(10)
-            
-            # Diagnosis
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Diagnosis:", 0, 1)
-            pdf.set_font("Arial", "", 12)
-            pdf.multi_cell(0, 10, prescription['Diagnosis'] or "Not specified")
-            pdf.ln(10)
-            
-            # Medicines
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Prescribed Medicines:", 0, 1)
-            pdf.ln(5)
-            
-            # Table header
+
+            # Tiêu đề lớn PRESCRIPTION
+            pdf.set_font("DejaVu", "B", 22)
+            pdf.cell(0, 15, "PRESCRIPTION", 0, 1, "C")
+            pdf.ln(3)
+
+            # Thông tin bệnh nhân
+            age = calc_age(prescription['DateOfBirth'])
+            gender = "Male" if prescription['Gender'] == "M" else "Female"
+            pdf.set_font("DejaVu", "B", 12)
+            pdf.cell(0, 10, f"Full name: {prescription['PatientName']}         Age: {age}         Gender: {gender}", 0, 1)
+            pdf.set_font("DejaVu", "B", 11)
+            pdf.cell(0, 7, f"Address: {prescription['Address']}", 0, 1)
+            pdf.cell(0, 7, f"Diagnosis: {prescription.get('Diagnosis') or '-'}", 0, 1)
+            pdf.ln(7)
+
+            # Danh sách thuốc
+            pdf.set_font("DejaVu", "B", 12)
+            pdf.cell(0, 10, "Medications:", 0, 1)
+            pdf.ln(1)
+
+            # Tiêu đề bảng
             pdf.set_fill_color(200, 220, 255)
-            pdf.cell(80, 10, "Medicine", 1, 0, "C", 1)
-            pdf.cell(30, 10, "Dosage", 1, 0, "C", 1)
-            pdf.cell(30, 10, "Frequency", 1, 0, "C", 1)
-            pdf.cell(30, 10, "Duration", 1, 1, "C", 1)
-            
-            pdf.set_font("Arial", "", 12)
+            add_col_widths = [50, 25, 90, 25]
+            headers = ["Medicine", "Dosage", "Frequency", "Duration"]
+            for i, header in enumerate(headers):
+                pdf.cell(add_col_widths[i], 10, header, 1, 0, "C", 1)
+            pdf.ln()
+
+            pdf.set_font("DejaVu", "", 11)
+            line_height = 8
+            col_widths = {
+                "Medicine": 50,
+                "Dosage": 25,
+                "Frequency": 90,
+                "Duration": 25
+            }
             for med in details:
-                pdf.cell(80, 10, med['MedicineName'], 1)
-                pdf.cell(30, 10, med['Dosage'], 1)
-                pdf.cell(30, 10, med['Frequency'], 1)
-                pdf.cell(30, 10, med['Duration'] or "-", 1)
-                pdf.ln()
+                cell_texts = {
+                    "Medicine": med.get("MedicineName", "-"),
+                    "Dosage": med.get("Dosage", "-"),
+                    "Frequency": med.get("Frequency", "-"),
+                    "Duration": med.get("Duration", "-")
+                }
+
+                # Tính số dòng thực sự cần dùng cho mỗi ô
+                line_counts = []
+                for key, col_width in col_widths.items():
+                    text = cell_texts[key]
+                    est_chars_per_line = col_width / 2.5
+                    est_lines = int(len(text) / est_chars_per_line) + 1
+                    line_counts.append(est_lines)
+
+                row_height = max(line_counts) * line_height
+
+                # Ghi nhớ vị trí đầu hàng
+                x_start = pdf.get_x()
+                y_start = pdf.get_y()
+
+                # In từng ô
+                x = x_start
+                for key in col_widths:
+                    text = cell_texts[key]
+                    col_width = col_widths[key]
+
+                    # Ước tính số dòng và chiều cao text trong ô này
+                    est_chars_per_line = col_width / 2.5
+                    num_lines = int(len(text) / est_chars_per_line) + 1
+                    text_height = num_lines * line_height
+
+                    # Tính offset để căn giữa theo chiều cao (vertical center)
+                    y_offset = (row_height - text_height) / 2
+
+                    # Vẽ khung ô
+                    pdf.rect(x, y_start, col_width, row_height)
+
+                    # Di chuyển con trỏ vào giữa ô (theo chiều dọc)
+                    pdf.set_xy(x, y_start + y_offset)
+                    pdf.multi_cell(col_width, line_height, text, border=0, align="C")
+
+                    # Di chuyển sang cột tiếp theo
+                    x += col_width
+
+                # Xuống hàng mới
+                pdf.set_y(y_start + row_height)
             
-            # Notes
-            if prescription['Notes']:
-                pdf.ln(10)
-                pdf.set_font("Arial", "B", 12)
-                pdf.cell(0, 10, "Additional Notes:", 0, 1)
-                pdf.set_font("Arial", "", 12)
-                pdf.multi_cell(0, 10, prescription['Notes'])
-            
-            # Footer
-            pdf.ln(20)
-            pdf.cell(0, 10, "Doctor's Signature: ________________________", 0, 1, "R")
+            pdf.ln(5)
+            # Lời dặn của bác sĩ
+            pdf.set_font("DejaVu", "B", 12)
+            pdf.cell(0, 10, "Doctor's instructions:", 0, 1)
+            pdf.set_font("DejaVu", "", 11)
+            pdf.multi_cell(0, 7, prescription.get('Note', "-"))
+            pdf.ln(10)
+
+            # Địa điểm, ngày tháng, bác sĩ và ký tên
+            pdf.set_font("DejaVu", "", 11)
+            date_text = f"Hanoi, {prescription['PrescriptionDate'].strftime('%B %d, %Y')}"
+            date_text_width = pdf.get_string_width(date_text)
+            page_width = pdf.w - 2 * pdf.l_margin
+            x_align = pdf.l_margin + page_width - date_text_width
+
+            pdf.set_x(x_align)
+            pdf.cell(date_text_width, 7, date_text, 0, 1,"C")
+
+            pdf.ln()
+            pdf.set_font("DejaVu", "B", 11)
+            pdf.set_x(x_align)
+            pdf.cell(date_text_width, 7, "Doctor's Signature", 0, 1, "C")
+
+            pdf.ln(15)
+            pdf.set_font("DejaVu", "B", 11)
+            pdf.set_x(x_align)
+            pdf.cell(date_text_width, 7, prescription['DoctorName'], 0, 1, "C")
+
+            # # Trước khi thêm ghi chú cuối
+            # if pdf.get_y() > 250:
+            #     pdf.add_page()
+
+            # # Nếu vừa add_page(), con trỏ ở đầu, ta nên tạo khoảng cách đẩy nó xuống gần cuối (nếu muốn footer cuối trang)
+            # if pdf.get_y() < 200:  # Giả sử vừa add page
+            #     pdf.set_y(250)  # Đặt footer ở vị trí cố định gần đáy
+
+            # # Footer notes
+            # pdf.set_font("DejaVu", "", 9)
+            # pdf.ln(5)
+            # pdf.multi_cell(0, 5, "- Follow the instructions carefully. If any unusual symptoms occur, please return to the hospital or call the phone number listed above (7 AM - 9 PM).")
+            # pdf.multi_cell(0, 5, "- Bring this prescription with you if you come back for a follow-up.")
+            # pdf.multi_cell(0, 5, "- Name of the child's father/mother or guardian:")
             
             pdf.output(output_path)
-            return True, f"PDF generated at {output_path}"
-            
+            return True, f"PDF đã được tạo tại {output_path}"
+
     except Exception as e:
-        return False, f"Error generating PDF: {e}"
+        return False, f"Lỗi khi tạo PDF: {e}"
+
 def get_financial_report_data(conn, start_date=None, end_date=None):
     """
     Get comprehensive financial report data including:

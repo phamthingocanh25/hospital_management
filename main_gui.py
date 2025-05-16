@@ -15,7 +15,9 @@ from tkcalendar import DateEntry
 from datetime import datetime, time, timedelta
 from tkinter import filedialog
 import csv
-
+import sys
+from decimal import Decimal
+sys.stdout.reconfigure(encoding='utf-8')
 
 
 # Custom color scheme
@@ -90,10 +92,7 @@ def center_window(window, width=None, height=None):
     
     window.geometry(f"+{x}+{y}")
 
-def open_login_window(root):
-    if root: # Check if root exists before destroying
-        root.destroy()
-
+def main():
     login_window = tk.Tk()
     login_window.title("Hospital Management System - Login")
     login_window.geometry("900x700") # Match example size
@@ -102,7 +101,7 @@ def open_login_window(root):
     # --- Background Image Handling (from AppWithBackground example) ---
     try:
         # IMPORTANT: Change this path to your actual background image file
-        bg_image_path = "C:\\Users\\emily\\Downloads\\hospital_management-main\\anh_bv.png"
+        bg_image_path = "C:\\DMS\\prj_0205\\anh_bv.png"
         bg_image = Image.open(bg_image_path)
         bg_image = bg_image.resize((900, 700), Image.Resampling.LANCZOS)
         bg_photo = ImageTk.PhotoImage(bg_image)
@@ -125,7 +124,7 @@ def open_login_window(root):
     # Define a style for the frame to set background
     style = ttk.Style()
     style.configure('Login.TFrame', background='white', borderwidth=2, relief=tk.RIDGE)
-    main_frame.place(relx=0.5, rely=0.5, anchor="center", width=400, height=300)
+    main_frame.place(relx=0.5, rely=0.5, anchor="center", width=400, height=350)
     # --- End Centered Login Frame ---
 
     # --- Authentication Logic (Keep your original logic here) ---
@@ -218,7 +217,7 @@ def open_login_window(root):
     login_btn = ttk.Button(main_frame, text="Login", width=15,
                            command=authenticate_user_action, style='Login.TButton') # Optional style
     # Define style for button if needed
-    style.configure('Login.TButton', font=("Arial", 10, "bold"), padding=(10, 5))
+    style.configure('Login.TButton', font=("Arial", 9, "bold"), padding=(10, 5))
     login_btn.pack(pady=20)
     # --- End Login Widgets ---
 
@@ -285,12 +284,11 @@ def admin_menu_item_clicked(item_name, conn, username, admin_window, refresh_cal
 
         # Patient Service Menu Items
         "View Patient Services": lambda: view_patient_services_gui(conn),
-        "Add Patient Service": lambda: add_patient_service_gui(conn),
+        "Add Patient Service": lambda: create_patient_services_gui(conn),
         "Delete Patient Service": lambda: delete_patient_service_gui(conn),
 
         # Prescription Menu Items
         "View Prescriptions": lambda: view_prescriptions_gui(conn),
-        "Create Prescription": lambda: create_prescription_gui(conn, None), # Admin might not have a specific doctor ID? Or needs selection. Pass None for now.
         "Delete Prescription": lambda: delete_prescription_gui(conn),
         "Delete Prescription Item": lambda: delete_prescription_details_gui(conn),
 
@@ -308,7 +306,6 @@ def admin_menu_item_clicked(item_name, conn, username, admin_window, refresh_cal
         # Inventory Menu Items
         "View Inventory": lambda: view_inventory_gui(conn),
         "Add Inventory Item": lambda: add_inventory_gui(conn),
-        "Update Inventory Item": lambda: update_inventory_gui(conn),
         "Disable Inventory Item": lambda: disable_inventory_item_gui(conn), # Needs Inventory ID - how to get? Maybe disable button for now.
         "Adjust Inventory": lambda: adjust_inventory_gui(conn),
 
@@ -324,7 +321,7 @@ def admin_menu_item_clicked(item_name, conn, username, admin_window, refresh_cal
 
         # Reports Menu Items
         "Financial Report": lambda: generate_financial_report_gui(conn),
-        "Room Report": lambda: get_room_statistics_gui(conn),
+        # "Room Report": lambda: get_room_statistics_gui(conn),
         "Statistics Report": lambda: generate_statistics_gui(conn), # Added this based on your functions
 
         # System Menu Items
@@ -369,23 +366,12 @@ def open_admin_menu(conn, username):
         username (str): The username of the logged-in admin.
     """
     admin_window = tk.Tk()
+    admin_window.lift()
+    admin_window.attributes('-topmost',True)
+    admin_window.after(100, lambda: admin_window.attributes('-topmost', False))
     admin_window.title(f"Admin Dashboard - {username}")
     admin_window.geometry("1200x700")
     admin_window.resizable(False, False)
-
-    # --- Background Image Handling ---
-    bg_photo_ref = None
-    try:
-        bg_image_path = "hospital_bg.jpg" # Đổi đường dẫn nếu cần
-        bg_image = Image.open(bg_image_path)
-        bg_image = bg_image.resize((1200, 700), Image.Resampling.LANCZOS)
-        bg_photo_ref = ImageTk.PhotoImage(bg_image)
-        bg_label = tk.Label(admin_window, image=bg_photo_ref)
-        bg_label.place(x=0, y=0, relwidth=1, relheight=1)
-    except Exception as e:
-        print(f"Warning: Could not load background image '{bg_image_path}'. Error: {e}")
-        admin_window.config(bg="#f0f2f5")
-    # --- End Background Image Handling ---
 
     # --- Left Menu Frame ---
     # ... (code tạo menu bên trái giữ nguyên như trước) ...
@@ -425,17 +411,17 @@ def open_admin_menu(conn, username):
     menu_items = [ # Giữ nguyên danh sách menu items của bạn
         ("Doctor", "--- DOCTOR ---"), "Add Doctor", "Delete Doctor", "Update Doctor Info", "Assign Doctor to User", "View Doctors", "Disable Doctor",
         ("Patient", "--- PATIENT ---"), "Add Patient", "Delete Patient", "View Patients", "Update Patient Info", "Disable Patient Account", "View Emergency Contacts", "Add Emergency Contact", "Update Emergency Contact", "Delete Emergency Contact",
-        ("Department", "--- DEPARTMENT 🏥---"), "View Departments", "Add Department", "Update Department",
+        ("Department", "--- DEPARTMENT ---"), "View Departments", "Add Department", "Update Department",
         ("Appointment", "--- APPOINTMENT ---"), "Schedule Appointment", "View Appointments", "Update Appointment Status",
         ("Room", "--- ROOM ---"), "View Rooms", "Add Room", "Update Room", "Disable Room", "View Room Types", "Add Room Type", "Update Room Type", "Assign Room",
         ("Service", "--- SERVICE ---"), "View Services", "Add Service", "Update Service",
         ("Patient Service", "--- PATIENT SERVICE ---"), "View Patient Services", "Add Patient Service", "Delete Patient Service",
-        ("Prescription", "--- PRESCRIPTION ---"), "View Prescriptions", "Create Prescription", "Delete Prescription", "Delete Prescription Item",
+        ("Prescription", "--- PRESCRIPTION ---"), "View Prescriptions", "Delete Prescription", "Delete Prescription Item",
         ("Medicine", "--- MEDICINE ---"), "View Medicines", "Add Medicine", "Update Medicine", "Delete Medicine", "View Medicine Batches", "Add Medicine Batch", "Update Medicine Batch", "Delete Medicine Batch", "Adjust Medicine Stock",
-        ("Inventory", "--- INVENTORY ---"), "View Inventory", "Add Inventory Item", "Update Inventory Item", "Adjust Inventory",
+        ("Inventory", "--- INVENTORY ---"), "View Inventory", "Add Inventory Item", "Adjust Inventory",
         ("Insurance", "--- INSURANCE ---"), "View Insurance", "Create Insurance", "Update Insurance", "Delete Insurance",
         ("Invoice", "--- INVOICE ---"), "View Invoices", "Create Invoice",
-        ("Reports", "--- REPORTS ---"), "Financial Report", "Room Report", "Statistics Report",
+        ("Reports", "--- REPORTS ---"), "Financial Report", "Statistics Report",
         ("System", "--- SYSTEM ---"), "Register New User", "Delete User", "View System Users", "Change Password", "Logout"
     ]
 
@@ -563,35 +549,23 @@ def open_admin_menu(conn, username):
     # Center window and run main loop
     center_window(admin_window, 1200, 700)
     admin_window.mainloop()
+
 def open_doctor_menu(conn, doctor_id, username):
     """Mở cửa sổ Bảng điều khiển Bác sĩ với giao diện hiện đại, rõ ràng."""
     # Lưu ý: Sử dụng tk.Toplevel() thường tốt hơn cho cửa sổ phụ
     # nhưng giữ tk.Tk() để nhất quán với các hàm menu khác trong file của bạn.
     doctor_window = tk.Tk()
     doctor_window.title(f"Doctor Dashboard - {username} (ID: {doctor_id})")
+    doctor_window.lift()
+    doctor_window.attributes('-topmost',True)
+    doctor_window.after(100, lambda: doctor_window.attributes('-topmost', False))
+
     # Kích thước cửa sổ linh hoạt hơn một chút
     doctor_window.geometry("1200x700")
     # Cho phép thay đổi kích thước tối thiểu
     doctor_window.minsize(1000, 600)
     doctor_window.configure(bg="#ffffff")  # Nền trắng
-    buttons = [
-        # ... (keep existing buttons) ...
-        ("Order Admission", lambda: order_admission_gui(conn, doctor_id)), 
-        ("View Appointments", lambda: view_appointments_gui(conn, 'doctor', doctor_id)),
-        ("Update Appointment Status", lambda: update_appointment_status_gui(conn)),
-        ("View Patient", lambda: view_patient_gui(conn)),
-        ("View Emergency Contacts", lambda: view_emergency_contacts_gui(conn)),
-        ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
-        ("Create Prescription", lambda: create_prescription_gui(conn, doctor_id)),
-        ("Delete Prescription Item", lambda: delete_prescription_details_gui(conn)),
-        ("View Services", lambda: view_services_gui(conn)),
-        ("View Medicines", lambda: view_medicine_gui(conn)),
-        ("View Insurance", lambda: view_insurance_gui(conn)),
-        ("View Rooms", lambda: view_rooms_gui(conn)),
-        ("Change Password", lambda: change_password_gui(conn, username)),
-        ("Logout", lambda: logout_action(doctor_window)) # Fixed: Use logout_action
-    ]
-
+    
     # Bảng màu hiện đại (giữ nguyên từ code của bạn)
     primary_color = "#4a6fa5"
     secondary_color = "#6bbd99"
@@ -623,6 +597,25 @@ def open_doctor_menu(conn, doctor_id, username):
         card_font = ("Arial", 14, "bold")
 
     # --- Khung Menu Bên Trái ---
+    buttons = [
+        ("Dashboard", lambda: show_dashboard_content),
+        ("Order Admission", lambda: order_admission_gui(conn, doctor_id)), # <<< ADDED THIS
+        ("View Patients", lambda: view_patient_gui(conn)),
+        ("View Appointments", lambda: view_appointments_gui(conn, 'doctor', doctor_id)), # Pass doctor_id
+        ("Update Appointment Status", lambda: update_appointment_status_gui(conn)), # Abbreviated
+        ("View Prescriptions", lambda: view_prescriptions_gui(conn)),
+        ("Create Prescription", lambda: create_prescription_gui(conn, doctor_id)),
+        ("Delete Prescription Item", lambda: delete_prescription_details_gui(conn)),
+        ("View Emergency Contacts", lambda: view_emergency_contacts_gui(conn)),
+        ("View Services", lambda: view_services_gui(conn)),
+        ("Add Patient Service", lambda: create_patient_services_gui(conn, doctor_id)),
+        ("View Medicines", lambda: view_medicine_gui(conn)),
+        ("View Insurance", lambda: view_insurance_gui(conn)),
+        ("View Rooms", lambda: view_rooms_gui(conn)),
+        ("Change Password", lambda: change_password_gui(conn, username)),
+        ("Logout", lambda: logout_action(doctor_window))
+    ]
+
     menu_frame = tk.Frame(doctor_window, bg=menu_bg, width=230) # Tăng nhẹ chiều rộng
     menu_frame.pack(side="left", fill="y")
     menu_frame.pack_propagate(False)
@@ -637,11 +630,11 @@ def open_doctor_menu(conn, doctor_id, username):
     avatar_canvas.pack(pady=(25, 10)) # Tăng khoảng đệm trên
     avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
     avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'D',
-                              font=(title_font[0], 24, "bold"), fill="white") # Tăng kích thước chữ
+                            font=(title_font[0], 24, "bold"), fill="white") # Tăng kích thước chữ
 
     # Tên bác sĩ
     tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"), # Tăng kích thước
-             fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
+            fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
 
     # Lấy tên khoa từ CSDL (logic giữ nguyên)
     department_name = "Unknown Department" # Giá trị mặc định tốt hơn
@@ -669,52 +662,26 @@ def open_doctor_menu(conn, doctor_id, username):
                                 fg="#bdc3c7", bg=menu_header_bg, font=small_font)
     department_label.pack(pady=(0, 15))
 
-    # --- Các Mục Menu (với thanh cuộn) ---
-    menu_items_container = tk.Frame(menu_frame, bg=menu_bg)
-    menu_items_container.pack(fill="both", expand=True)
-
-    menu_canvas = tk.Canvas(menu_items_container, bg=menu_bg, highlightthickness=0)
-    menu_scrollbar = ttk.Scrollbar(menu_items_container, orient="vertical", command=menu_canvas.yview)
-    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg) # Frame chứa các nút menu
-
-    # Đặt frame chứa nút vào canvas
-    menu_canvas_window = menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
+    # --- Các Mục Menu với thanh cuộn ---
+    menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
+    menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
+    menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+    menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
     menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
-
     menu_scrollbar.pack(side="right", fill="y")
     menu_canvas.pack(side="left", fill="both", expand=True)
-
-    # Cập nhật vùng cuộn khi kích thước frame thay đổi
-    def _configure_menu_scrollregion(event):
+    def update_scroll_region(event):
         menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
-        # Thêm dòng này để đảm bảo chiều rộng của frame bên trong canvas co giãn theo canvas
-        menu_canvas.itemconfig(menu_canvas_window, width=event.width)
-
-    menu_buttons_frame.bind("<Configure>", _configure_menu_scrollregion)
-    # Đảm bảo canvas cũng cập nhật chiều rộng frame khi kích thước canvas thay đổi
-    # canvas.bind("<Configure>", lambda e: menu_canvas.itemconfig(menu_canvas_window, width=e.width))
-
-
-    # Xử lý cuộn chuột cho menu (logic giữ nguyên)
+        menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
+    menu_buttons_frame.bind("<Configure>", update_scroll_region)
     def _on_mousewheel_menu(event):
-         # Sử dụng event.delta cho Windows/macOS, event.num cho Linux
-        if hasattr(event, 'delta') and event.delta != 0:
-             # Windows/macOS: delta thường là +/- 120
-             scroll_units = -1 * (event.delta // 120)
-        elif hasattr(event, 'num') and event.num in (4, 5):
-             # Linux: num 4 là cuộn lên, 5 là cuộn xuống
-             scroll_units = -1 if event.num == 4 else 1
-        else:
-             return # Bỏ qua các sự kiện không xác định
-        menu_canvas.yview_scroll(scroll_units, "units")
-
-    # Gắn sự kiện cuộn chuột vào canvas và frame bên trong (và các widget con của frame)
-    # Việc gắn vào menu_buttons_frame giúp bắt sự kiện khi chuột ở trên khoảng trống giữa các nút
-    for widget in [menu_canvas, menu_buttons_frame]:
-         widget.bind_all("<MouseWheel>", _on_mousewheel_menu) # Windows/macOS
-         widget.bind_all("<Button-4>", _on_mousewheel_menu) # Linux scroll up
-         widget.bind_all("<Button-5>", _on_mousewheel_menu) # Linux scroll down
-
+        delta = 0
+        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
+        if delta: menu_canvas.yview_scroll(delta, "units")
+    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
+    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
 
     # --- Khu Vực Nội Dung Chính ---
     content_frame = tk.Frame(doctor_window, bg=light_color)
@@ -739,13 +706,13 @@ def open_doctor_menu(conn, doctor_id, username):
         if icon:
             # Tăng kích thước icon
             tk.Label(header, text=icon, font=(normal_font[0], 16),
-                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+                    bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
 
         tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"), # Tăng kích thước
-                 bg=card_bg, fg="#7f8c8d").pack(side="left")
+                bg=card_bg, fg="#7f8c8d").pack(side="left")
 
         tk.Label(card, text=str(value), font=card_font,
-                 bg=card_bg, fg=dark_color).pack(anchor="w", pady=5) # Thêm padding
+                bg=card_bg, fg=dark_color).pack(anchor="w", pady=5) # Thêm padding
 
         return card
 
@@ -760,10 +727,10 @@ def open_doctor_menu(conn, doctor_id, username):
             # Hiển thị tên ngắn gọn hơn nếu tên dài
             display_name = username.split()[0] if len(username.split()) > 1 else username
             tk.Label(header_frame, text=f"Welcome, Dr. {display_name}",
-                     font=title_font, bg=light_color, fg=dark_color).pack(side="left")
+                    font=title_font, bg=light_color, fg=dark_color).pack(side="left")
 
             tk.Label(header_frame, text=datetime.now().strftime("%A, %B %d, %Y"),
-                     font=small_font, bg=light_color, fg="#7f8c8d").pack(side="right", padx=10)
+                    font=small_font, bg=light_color, fg="#7f8c8d").pack(side="right", padx=10)
 
             # Khung chứa các thẻ thống kê
             stats_frame = tk.Frame(content_frame, bg=light_color)
@@ -772,23 +739,23 @@ def open_doctor_menu(conn, doctor_id, username):
             # Lấy dữ liệu thống kê (Cần hàm thực tế từ core_logic.py)
             stats_data = {"appointments": "N/A", "patients": "N/A", "prescriptions": "N/A"}
             try:
-                 # Giả sử bạn có một hàm get_doctor_dashboard_stats trong core_logic.py
-                 # Nó trả về (True, {"appointments": count1, "patients": count2, "prescriptions": count3})
-                 # hoặc (False, error_message)
-                 success_stats, stats_result = get_doctor_dashboard_stats(conn, doctor_id)
-                 if success_stats:
-                     stats_data = stats_result # Mong đợi dict như {"appointments": 5, ...}
-                 else:
-                     print(f"Warning: Could not fetch dashboard stats: {stats_result}")
-                     # Hiển thị lỗi trên UI nếu cần
-                     # tk.Label(stats_frame, text=f"Error loading stats: {stats_result}", fg="red", bg=light_color).pack()
+                # Giả sử bạn có một hàm get_doctor_dashboard_stats trong core_logic.py
+                # Nó trả về (True, {"appointments": count1, "patients": count2, "prescriptions": count3})
+                # hoặc (False, error_message)
+                success_stats, stats_result = get_doctor_dashboard_stats(conn, doctor_id)
+                if success_stats:
+                    stats_data = stats_result # Mong đợi dict như {"appointments": 5, ...}
+                else:
+                    print(f"Warning: Could not fetch dashboard stats: {stats_result}")
+                    # Hiển thị lỗi trên UI nếu cần
+                    # tk.Label(stats_frame, text=f"Error loading stats: {stats_result}", fg="red", bg=light_color).pack()
             except NameError:
-                 # Nếu hàm get_doctor_dashboard_stats chưa được định nghĩa trong core_logic
-                 print("Warning: Hàm 'get_doctor_dashboard_stats' không tồn tại (sử dụng dữ liệu N/A).")
+                # Nếu hàm get_doctor_dashboard_stats chưa được định nghĩa trong core_logic
+                print("Warning: Hàm 'get_doctor_dashboard_stats' không tồn tại (sử dụng dữ liệu N/A).")
             except Exception as e:
-                 print(f"Lỗi khi lấy dữ liệu thống kê dashboard: {e}")
-                 # Hiển thị lỗi trên UI nếu cần
-                 # tk.Label(stats_frame, text=f"Error loading stats: {e}", fg="red", bg=light_color).pack()
+                print(f"Lỗi khi lấy dữ liệu thống kê dashboard: {e}")
+                # Hiển thị lỗi trên UI nếu cần
+                # tk.Label(stats_frame, text=f"Error loading stats: {e}", fg="red", bg=light_color).pack()
 
 
             # Định nghĩa và tạo các thẻ thống kê
@@ -809,83 +776,83 @@ def open_doctor_menu(conn, doctor_id, username):
 
             # Hàm làm mới Treeview lịch hẹn
             def refresh_appointments_view(tree_widget):
-                 # Kiểm tra xem widget còn tồn tại không trước khi thao tác
-                 if not tree_widget or not tree_widget.winfo_exists():
-                     print("Debug: Appointments tree widget no longer exists. Skipping refresh.")
-                     return
-                 try:
-                     # Xóa các item cũ một cách an toàn
-                     for item in tree_widget.get_children():
-                         tree_widget.delete(item)
-                 except tk.TclError as e:
-                     # Bắt lỗi nếu widget đã bị hủy trong quá trình xóa
-                     print(f"Debug: Error clearing appointments tree (widget might be destroyed): {e}")
-                     return # Không thể tiếp tục nếu widget không hợp lệ
+                # Kiểm tra xem widget còn tồn tại không trước khi thao tác
+                if not tree_widget or not tree_widget.winfo_exists():
+                    print("Debug: Appointments tree widget no longer exists. Skipping refresh.")
+                    return
+                try:
+                    # Xóa các item cũ một cách an toàn
+                    for item in tree_widget.get_children():
+                        tree_widget.delete(item)
+                except tk.TclError as e:
+                    # Bắt lỗi nếu widget đã bị hủy trong quá trình xóa
+                    print(f"Debug: Error clearing appointments tree (widget might be destroyed): {e}")
+                    return # Không thể tiếp tục nếu widget không hợp lệ
 
-                 try:
-                     success, appts_data = search_appointments(
-                         conn,
-                         role='doctor',        # Vai trò hiện tại
-                         username=username,    # <<< THAY ĐỔI TẠI ĐÂY: Truyền username của bác sĩ
-                         year=datetime.now().year,
-                         month=datetime.now().month,
-                         day=datetime.now().day,
-                         status="Scheduled"    # Chỉ lấy các cuộc hẹn đã lên lịch cho hôm nay
-                     )
+                try:
+                    success, appts_data = search_appointments(
+                        conn,
+                        role='doctor',        # Vai trò hiện tại
+                        username=username,    # <<< THAY ĐỔI TẠI ĐÂY: Truyền username của bác sĩ
+                        year=datetime.now().year,
+                        month=datetime.now().month,
+                        day=datetime.now().day,
+                        status="Scheduled"    # Chỉ lấy các cuộc hẹn đã lên lịch cho hôm nay
+                    )
 
-                     if success:
-                          if appts_data: # Nếu có dữ liệu trả về
-                              for appt in appts_data:
-                                  # (Giữ nguyên phần xử lý và hiển thị dữ liệu)
-                                  appt_time_obj = appt.get("AppointmentTime")
-                                  time_str = "N/A"
-                                  if appt_time_obj is not None: # Quan trọng: Kiểm tra None trước
-                                     if isinstance(appt_time_obj, time):
+                    if success:
+                        if appts_data: # Nếu có dữ liệu trả về
+                            for appt in appts_data:
+                                # (Giữ nguyên phần xử lý và hiển thị dữ liệu)
+                                appt_time_obj = appt.get("AppointmentTime")
+                                time_str = "N/A"
+                                if appt_time_obj is not None: # Quan trọng: Kiểm tra None trước
+                                    if isinstance(appt_time_obj, time):
                                         time_str = appt_time_obj.strftime('%H:%M')
-                                     elif isinstance(appt_time_obj, datetime): # Nếu cột là DATETIME/TIMESTAMP
-                                          time_str = appt_time_obj.strftime('%H:%M')
-                                 # *** THÊM KIỂM TRA VÀ XỬ LÝ TIMEDELTA ***
-                                     elif isinstance(appt_time_obj, timedelta):
-                                      # Chuyển timedelta (số giây từ nửa đêm) thành chuỗi HH:MM
-                                          total_seconds = int(appt_time_obj.total_seconds())
-                                          hours = total_seconds // 3600
-                                          minutes = (total_seconds % 3600) // 60
-                                          time_str = f"{hours:02}:{minutes:02}"
-                                 # **************************************
-                                     elif isinstance(appt_time_obj, str): # Xử lý nếu CSDL trả về chuỗi
-                                          try:
+                                    elif isinstance(appt_time_obj, datetime): # Nếu cột là DATETIME/TIMESTAMP
+                                        time_str = appt_time_obj.strftime('%H:%M')
+                                # *** THÊM KIỂM TRA VÀ XỬ LÝ TIMEDELTA ***
+                                    elif isinstance(appt_time_obj, timedelta):
+                                    # Chuyển timedelta (số giây từ nửa đêm) thành chuỗi HH:MM
+                                        total_seconds = int(appt_time_obj.total_seconds())
+                                        hours = total_seconds // 3600
+                                        minutes = (total_seconds % 3600) // 60
+                                        time_str = f"{hours:02}:{minutes:02}"
+                                # **************************************
+                                    elif isinstance(appt_time_obj, str): # Xử lý nếu CSDL trả về chuỗi
+                                        try:
                                             parsed_time = datetime.strptime(appt_time_obj, '%H:%M:%S').time()
                                             time_str = parsed_time.strftime('%H:%M')
-                                          except ValueError:
+                                        except ValueError:
                                             try: # Thử định dạng khác nếu cần
-                                                 parsed_time = datetime.strptime(appt_time_obj, '%H:%M').time()
-                                                 time_str = parsed_time.strftime('%H:%M')
+                                                parsed_time = datetime.strptime(appt_time_obj, '%H:%M').time()
+                                                time_str = parsed_time.strftime('%H:%M')
                                             except ValueError:
-                                                 print(f"Warning: Could not parse time string '{appt_time_obj}'")
-                                                 time_str = "Invalid Str" # Hoặc giữ N/A
-                                     else:
-                                      # Ghi log nếu gặp kiểu dữ liệu không mong muốn khác
+                                                print(f"Warning: Could not parse time string '{appt_time_obj}'")
+                                                time_str = "Invalid Str" # Hoặc giữ N/A
+                                    else:
+                                    # Ghi log nếu gặp kiểu dữ liệu không mong muốn khác
                                         print(f"Warning: Unexpected type for AppointmentTime: {type(appt_time_obj)}")
                                         time_str = "Unknown Type"
 
-                                  patient_name = appt.get("PatientName", "N/A")
-                                  status = appt.get("Status", "N/A")
+                                patient_name = appt.get("PatientName", "N/A")
+                                status = appt.get("Status", "N/A")
 
-                                  tree_widget.insert("", "end", values=(time_str, patient_name, status))
-                          else:
-                              tree_widget.insert("", "end", values=("", "No scheduled appointments today", ""))
-                     else:
-                          print(f"Lỗi khi tải lịch hẹn: {appts_data}")
-                          tree_widget.insert("", "end", values=("Error", "Could not load appointments", str(appts_data)))
+                                tree_widget.insert("", "end", values=(time_str, patient_name, status))
+                        else:
+                            tree_widget.insert("", "end", values=("", "No scheduled appointments today", ""))
+                    else:
+                        print(f"Lỗi khi tải lịch hẹn: {appts_data}")
+                        tree_widget.insert("", "end", values=("Error", "Could not load appointments", str(appts_data)))
 
-                 except NameError:
-                      print("Warning: Hàm 'search_appointments' không tồn tại trong core_logic (hiển thị thông báo).")
-                      tree_widget.insert("", "end", values=("N/A", "Function missing", "Error"))
-                 except Exception as e:
-                      print(f"Lỗi không mong đợi khi làm mới lịch hẹn: {e}")
-                      import traceback
-                      traceback.print_exc()
-                      tree_widget.insert("", "end", values=("Error", "Unexpected error", str(e)))
+                except NameError:
+                    print("Warning: Hàm 'search_appointments' không tồn tại trong core_logic (hiển thị thông báo).")
+                    tree_widget.insert("", "end", values=("N/A", "Function missing", "Error"))
+                except Exception as e:
+                    print(f"Lỗi không mong đợi khi làm mới lịch hẹn: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    tree_widget.insert("", "end", values=("Error", "Unexpected error", str(e)))
 
 
             # Header của mục lịch hẹn
@@ -893,13 +860,13 @@ def open_doctor_menu(conn, doctor_id, username):
             appointments_header.pack(fill="x", pady=(10, 5))
 
             tk.Label(appointments_header, text="UPCOMING APPOINTMENTS",
-                     font=(small_font[0], 10, "bold"), bg=light_color, fg="#7f8c8d").pack(side="left")
+                    font=(small_font[0], 10, "bold"), bg=light_color, fg="#7f8c8d").pack(side="left")
 
             # Nút làm mới bên cạnh header
             # Đảm bảo command gọi đúng hàm refresh với widget tree làm đối số
             refresh_btn = tk.Button(appointments_header, text="🔄 Refresh",
                                     # command=lambda: refresh_appointments_view(appointments_tree), # Gán command sau khi appointments_tree được tạo
-                                     font=(small_font[0], 9), fg=accent_color, bg=light_color, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color)
+                                    font=(small_font[0], 9), fg=accent_color, bg=light_color, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color)
             refresh_btn.pack(side="right", padx=5)
 
 
@@ -946,49 +913,22 @@ def open_doctor_menu(conn, doctor_id, username):
 
     # --- Định Nghĩa Các Mục Menu và Lệnh ---
     # Sử dụng lambda để đảm bảo các đối số được truyền đúng cách tại thời điểm gọi
-    menu_actions = {
-        "Dashboard": ("📊", show_dashboard_content),
-        "Order Admission": ("➡️🏥", lambda: order_admission_gui(conn, doctor_id)), # <<< ADDED THIS
-        "View Patients": ("👥", lambda: view_patient_gui(conn)),
-        "View Appointments": ("📅", lambda: view_appointments_gui(conn, 'doctor', doctor_id)), # Pass doctor_id
-        "Update Appt Status": ("🔄", lambda: update_appointment_status_gui(conn)), # Abbreviated
-        "View Prescriptions": ("📄", lambda: view_prescriptions_gui(conn)),
-        "Create Prescription": ("➕", lambda: create_prescription_gui(conn, doctor_id)),
-        "Delete Prescription Item": ("❌", lambda: delete_prescription_details_gui(conn)),
-        "View Emergency Contacts": ("🆘", lambda: view_emergency_contacts_gui(conn)),
-        "View Services": ("⚕️", lambda: view_services_gui(conn)),
-        "View Medicines": ("💊", lambda: view_medicine_gui(conn)),
-        "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
-        "View Rooms": ("🚪", lambda: view_rooms_gui(conn)),
-        "Change Password": ("⚙️", lambda: change_password_gui(conn, username)),
-        "Logout": ("🚪", lambda: logout_action(doctor_window))
-    }
+    def on_enter(e, btn):
+        btn['bg'] = menu_hover_bg
+    def on_leave(e, btn):
+        btn['bg'] = menu_bg
 
-    # --- Tạo Các Nút Menu ---
-    # Gắn sự kiện cuộn chuột cho frame chứa nút để hoạt động tốt hơn
-    menu_buttons_frame.bind("<MouseWheel>", _on_mousewheel_menu)
-    menu_buttons_frame.bind("<Button-4>", _on_mousewheel_menu)
-    menu_buttons_frame.bind("<Button-5>", _on_mousewheel_menu)
-
-    for text, (icon, command) in menu_actions.items():
-        btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
-                        font=normal_font, fg=menu_fg, bg=menu_bg,
-                        bd=0, relief="flat", padx=15, pady=12,
-                        activebackground=menu_hover_bg, activeforeground=menu_fg,
-                        command=command)
-        btn.pack(fill="x", pady=1, padx=5) # Thêm padding ngang
-
-        # Hiệu ứng Hover (giữ nguyên)
-        btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
-        btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
-        # Gắn sự kiện cuộn chuột cho từng nút (quan trọng để cuộn khi chuột trên nút)
-        btn.bind("<MouseWheel>", _on_mousewheel_menu)
-        btn.bind("<Button-4>", _on_mousewheel_menu)
-        btn.bind("<Button-5>", _on_mousewheel_menu)
+    for text, command in buttons:
+        btn = tk.Button(menu_buttons_frame, text=text, font=normal_font, fg=menu_fg, bg=menu_bg,
+                        activebackground=menu_hover_bg, activeforeground=menu_fg, bd=0, padx=10, pady=10,
+                        anchor="w", command=command)
+        btn.pack(fill="x", padx=10, pady=2)
+        btn.bind("<Enter>", lambda e, b=btn: on_enter(e, b))
+        btn.bind("<Leave>", lambda e, b=btn: on_leave(e, b))
 
     # --- Footer trong Menu ---
     tk.Label(menu_frame, text="Hospital Management System © 2025", # Thêm năm
-             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
+            fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
 
     # Hiển thị dashboard mặc định sau khi cửa sổ đã sẵn sàng
     doctor_window.after(100, show_dashboard_content)
@@ -1009,9 +949,14 @@ def open_doctor_menu(conn, doctor_id, username):
 
 
     doctor_window.mainloop()
+
 def open_receptionist_menu(conn, username):
     """Mở cửa sổ Bảng điều khiển Receptionist với giao diện hiện đại và đầy đủ chức năng."""
     receptionist_window = tk.Tk()
+    receptionist_window.lift()
+    receptionist_window.attributes('-topmost',True)
+    receptionist_window.after(100, lambda: receptionist_window.attributes('-topmost', False))
+    
     receptionist_window.title(f"Receptionist Dashboard - {username}")
     receptionist_window.geometry("1200x700")
     receptionist_window.minsize(1000, 600)
@@ -1098,18 +1043,77 @@ def open_receptionist_menu(conn, username):
     tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
     tk.Label(user_frame, text="Role: Receptionist", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
     stats_frame = tk.Frame(content_frame, bg=light_color); stats_frame.pack(fill=tk.X, pady=(10, 20))
-    def get_receptionist_stats(db_conn): return {"today_appointments": "N/A", "pending_admissions": "N/A", "available_rooms": "N/A"} # Placeholder
-    stats_data = get_receptionist_stats(conn)
+
+    def get_receptionist_stats(db_conn):
+        stats_data = {"today_appointments": "N/A", "pending_admissions": "N/A", "available_rooms": "N/A"}
+        
+        if not db_conn:
+            return stats_data
+        
+        try:
+            with db_conn.cursor() as cursor:
+                # Ensure today is in the correct format: YYYY-MM-DD
+                today = datetime.now().date()  # Get today's date
+                today_str = today.strftime('%Y-%m-%d')  # Format it as a string
+                
+                # Print for debugging
+                print(f"Executing query with date: {today_str}")
+                
+                # Today's appointments count
+                query = f"SELECT COUNT(*) as count FROM Appointments WHERE DATE(AppointmentDate) = '{today_str}'"
+                cursor.execute(query)
+                result = cursor.fetchone()
+                stats_data["today_appointments"] = str(result['count']) if result and result['count'] is not None else "0"
+                
+                # Pending admissions count
+                cursor.execute("SELECT COUNT(*) as count FROM AdmissionOrders WHERE Status = 'Pending'")
+                result = cursor.fetchone()
+                stats_data["pending_admissions"] = str(result['count']) if result and result['count'] is not None else "0"
+                
+                # Available rooms count
+                cursor.execute("SELECT COUNT(*) as count FROM Rooms WHERE Status = 'Available'")
+                result = cursor.fetchone()
+                stats_data["available_rooms"] = str(result['count']) if result and result['count'] is not None else "0"
+        
+        except Exception as e:
+            print(f"Database error fetching receptionist stats: {e}")
+        
+        return stats_data
+
     def create_stat_card(parent, title, value, color, icon=None):
-        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1, highlightbackground=card_border, padx=15, pady=15)
-        header = tk.Frame(card, bg=card_bg); header.pack(fill="x", pady=(0, 10))
-        if icon: tk.Label(header, text=icon, font=(normal_font[0], 16), bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
-        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(side="left")
-        tk.Label(card, text=str(value), font=card_font, bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
+                    highlightbackground=card_border, padx=15, pady=15)
+        
+        header = tk.Frame(card, bg=card_bg)
+        header.pack(fill="x", pady=(0, 10))
+        
+        if icon:
+            tk.Label(header, text=icon, font=(normal_font[0], 16),
+                    bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
+        
+        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+                bg=card_bg, fg="#7f8c8d").pack(side="left")
+        
+        tk.Label(card, text=str(value), font=card_font,
+                bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
+        
         return card
-    stat_cards_info = [("Today's Appointments", stats_data.get("today_appointments", "N/A"), accent_color, "📅"), ("Pending Admissions", stats_data.get("pending_admissions", "N/A"), secondary_color, "📋"), ("Available Rooms", stats_data.get("available_rooms", "N/A"), primary_color, "🏥")]
+
+    # Get stats data from the database
+    stats_data = get_receptionist_stats(conn)
+
+    # Info for each stat card
+    stat_cards_info = [
+        ("Today's Appointments", stats_data.get("today_appointments", "N/A"), accent_color, "📅"),
+        ("Pending Admissions", stats_data.get("pending_admissions", "N/A"), secondary_color, "📋"),
+        ("Available Rooms", stats_data.get("available_rooms", "N/A"), primary_color, "🏥")
+    ]
+
+    # Create and place the stat cards
     for i, (title, value, color, icon) in enumerate(stat_cards_info):
-        card = create_stat_card(stats_frame, title, value, color, icon); card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew"); stats_frame.grid_columnconfigure(i, weight=1)
+        card = create_stat_card(stats_frame, title, value, color, icon)
+        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+        stats_frame.grid_columnconfigure(i, weight=1)
 
 
     # --- Danh sách hẹn hôm nay (Sử dụng dữ liệu thật) ---
@@ -1131,34 +1135,77 @@ def open_receptionist_menu(conn, username):
     tree.tag_configure('Confirmed', background='#e8f5e9'); tree.tag_configure('Pending', background='#fff9c4')
     tree.tag_configure('Cancelled', background='#ffebee'); tree.tag_configure('Scheduled', background='#e3f2fd')
 
-    def refresh_today_appointments(): # Keep the refresh function definition
-        if not tree.winfo_exists(): return
+    def refresh_today_appointments():
+        if not tree.winfo_exists():
+            return
         try:
-            for item in tree.get_children(): tree.delete(item)
-        except tk.TclError: return
+            for item in tree.get_children():
+                tree.delete(item)
+        except tk.TclError:
+            return
+
         try:
-            today = datetime.now()
-            success, appointments = search_appointments(conn, role='receptionist', username=username, year=today.year, month=today.month, day=today.day, status=None)
+            today = datetime.now().date()
+            success, appointments = search_appointments(conn, role='receptionist', username=username, status=None)
+
             if success:
-                if appointments:
-                    for appt in appointments:
-                        appt_time_obj = appt.get("AppointmentTime"); time_str = "N/A"
-                        if appt_time_obj is not None: # Keep time formatting
-                             if isinstance(appt_time_obj, time): time_str = appt_time_obj.strftime('%H:%M')
-                             elif isinstance(appt_time_obj, datetime): time_str = appt_time_obj.strftime('%H:%M')
-                             elif isinstance(appt_time_obj, timedelta): total_seconds = int(appt_time_obj.total_seconds()); hours, rem = divmod(total_seconds, 3600); minutes, _ = divmod(rem, 60); time_str = f"{hours:02}:{minutes:02}"
-                             elif isinstance(appt_time_obj, str):
-                                 try: time_str = datetime.strptime(appt_time_obj, '%H:%M:%S').strftime('%H:%M')
-                                 except ValueError:
-                                     try: time_str = datetime.strptime(appt_time_obj, '%H:%M').strftime('%H:%M')
-                                     except ValueError: time_str = appt_time_obj
-                             else: time_str = str(appt_time_obj)
-                        patient_name = appt.get("PatientName", "N/A"); doctor_name = appt.get("DoctorName", "N/A"); status = appt.get("Status", "N/A")
-                        tree.insert("", tk.END, values=(time_str, patient_name, doctor_name, status), tags=(status,))
-                else: tree.insert("", tk.END, values=("", "No appointments scheduled for today", "", ""))
-            else: messagebox.showerror("Load Error", f"Could not load appointments: {appointments}", parent=receptionist_window)
-        except NameError: messagebox.showerror("Code Error", "Function 'search_appointments' not found.", parent=receptionist_window)
-        except Exception as e: messagebox.showerror("Unexpected Error", f"Error: {str(e)}", parent=receptionist_window); import traceback; traceback.print_exc()
+                count_today_appointments = 0  # ✅ Biến đếm số lịch hôm nay
+
+                for appt in appointments:
+                    appt_date = appt.get("AppointmentDate")
+                    if not appt_date:
+                        continue
+
+                    # Chuyển đổi sang kiểu date nếu cần
+                    if isinstance(appt_date, str):
+                        try:
+                            appt_date = datetime.strptime(appt_date, "%Y-%m-%d").date()
+                        except ValueError:
+                            continue
+                    elif isinstance(appt_date, datetime):
+                        appt_date = appt_date.date()
+
+                    if appt_date != today:
+                        continue
+
+                    # ✅ Nếu đúng là hôm nay thì xử lý tiếp
+                    count_today_appointments += 1
+
+                    # Xử lý giờ hẹn
+                    time_str = "N/A"
+                    appt_time = appt.get("AppointmentTime")
+                    if appt_time:
+                        if isinstance(appt_time, time):
+                            time_str = appt_time.strftime('%H:%M')
+                        elif isinstance(appt_time, datetime):
+                            time_str = appt_time.strftime('%H:%M')
+                        elif isinstance(appt_time, str):
+                            for fmt in ("%H:%M:%S", "%H:%M"):
+                                try:
+                                    time_str = datetime.strptime(appt_time, fmt).strftime('%H:%M')
+                                    break
+                                except ValueError:
+                                    continue
+                            else:
+                                time_str = appt_time
+
+                    patient_name = appt.get("PatientName", "N/A")
+                    doctor_name = appt.get("DoctorName", "N/A")
+                    status = appt.get("Status", "N/A")
+
+                    tree.insert("", tk.END, values=(time_str, patient_name, doctor_name, status), tags=(status,))
+
+                if count_today_appointments == 0:
+                    # ✅ Không có lịch hôm nay → thông báo rõ
+                    tree.insert("", tk.END, values=("", "No appointments scheduled for today", "", ""))
+
+            else:
+                messagebox.showerror("Load Error", f"Could not load appointments: {appointments}", parent=receptionist_window)
+
+        except Exception as e:
+            messagebox.showerror("Unexpected Error", f"Error: {str(e)}", parent=receptionist_window)
+            import traceback
+            traceback.print_exc()
 
     refresh_btn = tk.Button(list_header, text="🔄 Refresh", font=(small_font[0], 9), fg=accent_color, bg=card_bg, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color, command=refresh_today_appointments)
     refresh_btn.pack(side="right", padx=5)
@@ -1189,7 +1236,7 @@ def open_receptionist_menu(conn, username):
 
         # Billing & Insurance
         "Create Invoice": ("➕💰", lambda: create_invoice_gui(conn)), # <<< ADDED
-        "View Invoices": ("🔍💰", lambda: view_invoices_gui(conn)),
+        "View Invoices": ("🔍💰", lambda: view_and_print_invoices_by_patient(conn)),
         "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
         "Create Insurance": ("➕🛡️", lambda: add_insurance_gui(conn)),
 
@@ -1240,6 +1287,9 @@ def open_receptionist_menu(conn, username):
 def open_accountant_menu(conn, username):
     """Opens the Accountant Dashboard with modern UI similar to doctor/receptionist menus"""
     accountant_window = tk.Tk()
+    accountant_window.lift()
+    accountant_window.attributes('-topmost',True)
+    accountant_window.after(100, lambda: accountant_window.attributes('-topmost', False))
     accountant_window.title(f"Accountant Dashboard - {username}")
     accountant_window.geometry("1200x700")
     accountant_window.minsize(1000, 600)
@@ -1538,6 +1588,9 @@ def open_accountant_menu(conn, username):
 def open_nurse_menu(conn, username):
     """Opens the Nurse Dashboard with modern UI"""
     nurse_window = tk.Tk()
+    nurse_window.lift()
+    nurse_window.attributes('-topmost',True)
+    nurse_window.after(100, lambda: nurse_window.attributes('-topmost', False))
     nurse_window.title(f"Nurse Dashboard - {username}")
     nurse_window.geometry("1200x700")
     nurse_window.minsize(1000, 600)
@@ -1825,6 +1878,9 @@ FROM Patients
 def open_pharmacist_menu(conn, username):
     """Opens the Pharmacist Dashboard with modern UI"""
     pharmacist_window = tk.Tk()
+    pharmacist_window.lift()
+    pharmacist_window.attributes('-topmost',True)
+    pharmacist_window.after(100, lambda: pharmacist_window.attributes('-topmost', False))
     pharmacist_window.title(f"Pharmacist Dashboard - {username}")
     pharmacist_window.geometry("1200x700")
     pharmacist_window.minsize(1000, 600)
@@ -2045,6 +2101,7 @@ def open_pharmacist_menu(conn, username):
     menu_actions = {
         "Dashboard": ("📊", lambda: load_recent_prescriptions()),
         "View Prescriptions": ("💊", lambda: view_prescriptions_gui(conn)),
+        "View Prescriptions Details": ("💊", lambda: view_prescription_gui(conn)),
         "View Medicines": ("🧪", lambda: view_medicine_gui(conn)),
         "View Medicine Batch": ("📦", lambda: view_medicine_batches_gui(conn)),
         "Adjust Medicine Stock": ("🔄", lambda: adjust_medicine_batch_gui(conn)),
@@ -2058,7 +2115,7 @@ def open_pharmacist_menu(conn, username):
 
     # Organize menu items into categories
     categories = {
-        "Prescriptions": ["View Prescriptions"],
+        "Prescriptions": ["View Prescriptions", "View Prescriptions Details"],
         "Medicines": ["View Medicines", "View Medicine Batch", "Adjust Medicine Stock"],
         "Inventory": ["View Inventory", "Adjust Inventory"],
         "Information": ["View Patient Services", "View Insurance"],
@@ -2109,6 +2166,9 @@ def open_pharmacist_menu(conn, username):
 def open_director_menu(conn, username):
     """Opens the Director Dashboard with modern UI"""
     director_window = tk.Tk()
+    director_window.lift()
+    director_window.attributes('-topmost',True)
+    director_window.after(100, lambda: director_window.attributes('-topmost', False))
     director_window.title(f"Director Dashboard - {username}")
     director_window.geometry("1200x700")
     director_window.minsize(1000, 600)
@@ -2385,9 +2445,13 @@ def open_director_menu(conn, username):
 
     center_window(director_window)
     director_window.mainloop()
+
 def open_inventory_manager_menu(conn, username):
     """Opens the Inventory Management Dashboard with modern UI"""
     inv_window = tk.Tk()
+    inv_window.lift()
+    inv_window.attributes('-topmost',True)
+    inv_window.after(100, lambda: inv_window.attributes('-topmost', False))
     inv_window.title(f"Inventory Manager - {username}")
     inv_window.geometry("1200x700")
     inv_window.minsize(1000, 600)
@@ -2499,18 +2563,23 @@ def open_inventory_manager_menu(conn, username):
         }
         try:
             with db_conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(distinct InventoryID) FROM Inventory")
-                stats["total_items"] = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(distinct InventoryID) as count FROM Inventory")
+                result = cursor.fetchone()
+                stats["total_items"] = str(result['count']) if result and result['count'] is not None else "0"
                 
-                cursor.execute("SELECT COUNT(*) FROM Inventory WHERE Quantity < 5")
-                stats["low_stock"] = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(*) as count FROM Inventory WHERE Quantity < 5")
+                result = cursor.fetchone()
+                stats["low_stock"] = str(result['count']) if result and result['count'] is not None else "0"
                 
-                cursor.execute("SELECT COUNT(DISTINCT MedicineID) FROM Medicine")
-                stats["total_medicines"] = cursor.fetchone()[0]
+                cursor.execute("SELECT COUNT(DISTINCT MedicineID) as count FROM Medicine")
+                result = cursor.fetchone()
+                stats["total_medicines"] = str(result['count']) if result and result['count'] is not None else "0"
                 
-                cursor.execute("""SELECT COUNT(*) FROM MedicineBatch 
+                cursor.execute("""SELECT COUNT(*) as count FROM MedicineBatch 
                                WHERE ExpiryDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)""")
-                stats["expiring_soon"] = cursor.fetchone()[0]
+                result = cursor.fetchone()
+                stats["expiring_soon"] = str(result['count']) if result and result['count'] is not None else "0"
+                
         except Exception as e:
             print(f"Database error: {e}")
         return stats
@@ -2537,10 +2606,10 @@ def open_inventory_manager_menu(conn, username):
     stats_data = get_inventory_stats(conn)
     
     stat_cards_info = [
-        ("Total Items", stats_data["total_items"], primary_color, "📦"),
-        ("Low Stock", stats_data["low_stock"], accent_color, "⚠️"),
-        ("Total Medicines", stats_data["total_medicines"], secondary_color, "💊"),
-        ("Expiring Soon", stats_data["expiring_soon"], "#e74c3c", "⏳")
+        ("Total Items", stats_data.get("total_items","N/A"), primary_color, "📦"),
+        ("Low Stock", stats_data.get("low_stock","N/A"), accent_color, "⚠️"),
+        ("Total Medicines", stats_data.get("total_medicines","N/A"), secondary_color, "💊"),
+        ("Expiring Soon", stats_data.get("expiring_soon","N/A"), "#e74c3c", "⏳")
     ]
 
     for i, (title, value, color, icon) in enumerate(stat_cards_info):
@@ -3074,10 +3143,10 @@ def assign_doctor_user_gui(conn):
     def submit():
         doctor_id = entry_doctor_id.get().strip()
         username = entry_username.get().strip()
-        password = entry_password.get().strip() or "123456"  # Mặc định nếu không nhập
+        password = entry_password.get().strip()
 
         if not doctor_id or not username:
-            messagebox.showerror("Error", "⚠️ Doctor ID và Username là bắt buộc.")
+            messagebox.showerror("Error", "⚠️ Doctor ID and Username are required.")
             window.lift()
             window.focus_force()
             return
@@ -3116,6 +3185,10 @@ def view_doctor_gui(conn):
     search_frame = tk.Frame(view_window, bg=BG_COLOR)
     search_frame.pack(pady=5)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
+
     tk.Label(search_frame, text="Doctor ID:", bg=BG_COLOR).grid(row=0, column=0, padx=5)
     doctor_id_entry = tk.Entry(search_frame)
     doctor_id_entry.grid(row=0, column=1, padx=5)
@@ -3139,23 +3212,24 @@ def view_doctor_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def load_data():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         doctor_id = doctor_id_entry.get().strip() or None
         doctor_name = doctor_name_entry.get().strip() or None
         success, result = search_doctors(conn, doctor_id, doctor_name)
         if success and result:
-            tree.delete(*tree.get_children())
             for row in result:
                 if len(row) >= 6:  # Đảm bảo đủ cột
                     tree.insert("", tk.END, values=(
                         row['DoctorID'], row['DoctorName'], row['Specialty'], row['DepartmentID'], row['PhoneNumber'], row['Email']
                     ))
                 else:
-                    messagebox.showerror("Error", "⚠️ Dữ liệu không hợp lệ.")
+                    error_label.config(text="No data found")
                     view_window.lift()
                     view_window.focus_force()
                     return
         else:
-            messagebox.showerror("Error", "No data found.")
+            error_label.config(text="No data found")
             view_window.lift()
 
     # Search button
@@ -3340,6 +3414,9 @@ def view_patient_gui(conn):
     search_frame = tk.Frame(view_window, bg=BG_COLOR)
     search_frame.pack(pady=5)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     tk.Label(search_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, padx=5)
     patient_id_entry = tk.Entry(search_frame)
     patient_id_entry.grid(row=0, column=1, padx=5)
@@ -3362,23 +3439,24 @@ def view_patient_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def load_data():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         patient_id = patient_id_entry.get().strip() or None
         patient_name = patient_name_entry.get().strip() or None
-        success, result = search_patient(conn, patient_id, patient_name)
+        success, result = search_patients(conn, patient_id, patient_name)
         if success and result:
-            tree.delete(*tree.get_children())
             for row in result:
                 if len(row) >= 6:
                     tree.insert("", tk.END, values=(
                         row['PatientID'], row['PatientName'], row['DateOfBirth'], row['Gender'], row['Address'], row['PhoneNumber']
                     ))
                 else:
-                    messagebox.showerror("Error", "⚠️ Dữ liệu không hợp lệ.")
+                    error_label.config(text="No data found")
                     view_window.lift()
                     view_window.focus_force()
                     return
         else:
-            messagebox.showerror("Error", "No data found.")
+            error_label.config(text="No data found")
             view_window.lift()
 
     # Search button
@@ -3646,6 +3724,7 @@ def view_departments_gui(conn):
     
     # Fetch data immediately when window opens
     fetch()
+
 # Appointment GUI Functions
 def schedule_appointment_gui(conn):
     """GUI for scheduling appointments with improved validation and auto-refresh"""
@@ -3689,7 +3768,7 @@ def schedule_appointment_gui(conn):
     def search_patient():
         patient_id = entry_patient.get()
         if patient_id:
-            success, patient = search_patient(conn, patient_id=patient_id)
+            success, patient = search_patients(conn, patient_id=patient_id)
             if success and patient:
                 messagebox.showinfo("Patient Found", 
                                   f"Patient: {patient[0]['PatientName']}", 
@@ -3790,6 +3869,7 @@ def schedule_appointment_gui(conn):
     
     # Configure grid weights
     form_frame.grid_columnconfigure(1, weight=1)
+
 def refresh_appointments(conn, doctor_id, tree_widget):
     """
     Truy vấn cơ sở dữ liệu và cập nhật Treeview cuộc hẹn sắp tới.
@@ -3847,6 +3927,7 @@ def refresh_appointments(conn, doctor_id, tree_widget):
             for item in tree_widget.get_children(): tree_widget.delete(item)
             tree_widget.insert("", tk.END, values=("Error", "Check logs", "Error"))
         except tk.TclError: pass
+
 def view_appointments_gui(conn, role, user_id=None):
     """GUI for viewing appointments with consistent styling to doctor dashboard"""
     view_window = tk.Toplevel()
@@ -3921,6 +4002,9 @@ def view_appointments_gui(conn, role, user_id=None):
                          bd=0, relief="flat", padx=15, pady=5)
     search_btn.grid(row=1, column=8, padx=10)
     
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     # Treeview in a card
     tree_card = tk.Frame(main_frame, bg=card_bg, bd=0, relief="flat",
                         highlightbackground=card_border, highlightthickness=1,
@@ -3983,26 +4067,32 @@ def view_appointments_gui(conn, role, user_id=None):
             tree.delete(*tree.get_children())
 
             if not success:
-                messagebox.showerror("Error", result)
+                error_label.config ("Error", result)
                 return
             if not result:
-                messagebox.showinfo("Info", "No appointments found matching the criteria.")
+                error_label.config(text="No appointments found matching the criteria.")
                 return
 
             for appt in result:
                 tree.insert("", tk.END, values=(
                     appt["AppointmentID"],
                     appt["AppointmentDate"].strftime('%Y-%m-%d') if appt["AppointmentDate"] else "",
-                    appt["AppointmentTime"].strftime('%H:%M') if appt["AppointmentTime"] else "",
+                    f"{int(appt['AppointmentTime'].seconds // 3600):02d}:{int((appt['AppointmentTime'].seconds % 3600) // 60):02d}"
+                    if appt["AppointmentTime"] else "",
                     appt["Status"],
                     appt["DoctorName"],
                     appt["PatientName"]
                 ), tags=(appt["Status"],))
 
+
         except ValueError:
-            messagebox.showerror("Error", "Please enter valid numbers for year/month/day")
+            error_label.config(text="Please enter valid numbers for year/month/day")
+            view_window.lift()
+            view_window.focus_force()
+            return
         except Exception as e:
-            messagebox.showerror("Error", f"An unexpected error occurred: {str(e)}")
+            error_label.config(text=f"An unexpected error occurred: {str(e)}")
+            view_window.lift()
 
     search_btn.config(command=fetch_appointments)
     
@@ -4257,6 +4347,9 @@ def view_rooms_gui(conn):
     search_frame = tk.Frame(view_window, bg=BG_COLOR)
     search_frame.pack(pady=5)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     # Room ID Label and Entry
     tk.Label(search_frame, text="Room ID:", bg=BG_COLOR).grid(row=0, column=0, padx=5, sticky='w')
     room_id_entry = tk.Entry(search_frame)
@@ -4286,13 +4379,14 @@ def view_rooms_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def search():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         room_id = room_id_entry.get().strip() or None
         room_number = room_number_entry.get().strip() or None
         status = status_entry.get().strip() or None  # Get status filter input
 
         success, result = search_rooms(conn, room_id, room_number, status)  # Pass status to search function
         if success and result:
-            tree.delete(*tree.get_children())  # Clear previous results
             for room in result:
                 if len(room) > 4:
                     tree.insert("", tk.END, values=(
@@ -4305,12 +4399,12 @@ def view_rooms_gui(conn):
                         room["LastCleanedDate"],
                     ))
                 else:
-                    messagebox.showerror("Error", "Invalid room data format")
+                    error_label.config(text="Invalid room data format")
                     view_window.lift()
                     view_window.focus_force()
                     return
         else:
-            messagebox.showinfo("Result", "No rooms found matching the criteria.")
+            error_label.config(text="No rooms found matching the criteria.")
             view_window.lift()
             view_window.focus_force()
 
@@ -4337,6 +4431,9 @@ def view_room_types_gui(conn):
     search_frame = tk.Frame(view_window, bg=BG_COLOR)
     search_frame.pack(fill=tk.X, pady=10)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     # RoomTypeID filter
     tk.Label(search_frame, text="Room Type ID:", bg=BG_COLOR).pack(side=tk.LEFT, padx=5)
     room_type_id_entry = tk.Entry(search_frame)
@@ -4355,6 +4452,8 @@ def view_room_types_gui(conn):
     search_btn.pack(side=tk.LEFT, padx=10)
 
     def search():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         room_type_id = room_type_id_entry.get().strip() or None
         type_name = type_name_entry.get().strip() or None
 
@@ -4369,7 +4468,7 @@ def view_room_types_gui(conn):
                     room_type.get("Description", "")
                 ))
         else:
-            messagebox.showerror("Error", "Failed to fetch room types.")
+            error_label.config(text="Failed to fetch room types.")
             view_window.lift()
             view_window.focus_force()
     # Treeview
@@ -4496,36 +4595,37 @@ def update_room_type_gui(conn):
     apply_styles(submit_btn)
     submit_btn.pack(pady=10)
 
-def get_room_statistics_gui(conn):
-    """GUI for getting room statistics"""
-    stats_window = tk.Toplevel()
-    stats_window.title("Room Statistics")
-    stats_window.geometry("400x300")
-    stats_window.config(bg=BG_COLOR)
-    center_window(stats_window)
-    stats_window.lift()
-    stats_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
-    stats_window.after(100, lambda: stats_window.attributes('-topmost', False))
-    # Main frame
-    main_frame = tk.Frame(stats_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+# def get_room_statistics_gui(conn):
+#     """GUI for getting room statistics"""
+#     stats_window = tk.Toplevel()
+#     stats_window.title("Room Statistics")
+#     stats_window.geometry("400x300")
+#     stats_window.config(bg=BG_COLOR)
+#     center_window(stats_window)
+#     stats_window.lift()
+#     stats_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
+#     stats_window.after(100, lambda: stats_window.attributes('-topmost', False))
+#     # Main frame
+#     main_frame = tk.Frame(stats_window, bg=BG_COLOR)
+#     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    # Title
-    title_label = tk.Label(main_frame, text="Room Statistics", font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR)
-    title_label.pack(pady=(0, 20))
+#     # Title
+#     title_label = tk.Label(main_frame, text="Room Statistics", font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR)
+#     title_label.pack(pady=(0, 20))
 
-    # Get all room statistics
-    success, room_stats = get_room_statistics(conn)
-    if not success:
-        messagebox.showerror("Error", room_stats)
-        return
+#     # Get all room statistics
+#     success, room_stats = get_room_statistics(conn)
+#     if not success:
+#         messagebox.showerror("Error", room_stats)
+#         return
 
-    # Display room statistics
-    listbox = tk.Listbox(main_frame, width=50, height=15)
-    listbox.pack(padx=10, pady=10)
+#     # Display room statistics
+#     listbox = tk.Listbox(main_frame, width=50, height=15)
+#     listbox.pack(padx=10, pady=10)
 
-    for stat in room_stats:
-        listbox.insert(tk.END, f"Room Number: {stat['RoomNumber']}, Status: {stat['Status']}")
+#     for stat in room_stats:
+#         listbox.insert(tk.END, f"Room Number: {stat['RoomNumber']}, Status: {stat['Status']}")
+
 # report
 def assign_room_gui(conn):
     """GUI for assigning a room to a patient"""
@@ -4552,7 +4652,7 @@ def assign_room_gui(conn):
     apply_styles(entry_patient_id)
 
     # Room Number
-    tk.Label(form_frame, text="Room Number:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
+    tk.Label(form_frame, text="Room Type ID:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
     entry_room_number = tk.Entry(form_frame)
     entry_room_number.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_room_number)
@@ -4605,6 +4705,7 @@ def refresh_room_status(conn, tree):
     
     except MySQLError as e:
         messagebox.showerror("Error", f"Failed to load room status: {str(e)}")
+
 ### Admission_order
 def order_admission_gui(conn, doctor_id):
     """GUI for Doctor to order patient admission."""
@@ -4682,7 +4783,6 @@ def order_admission_gui(conn, doctor_id):
     submit_btn = tk.Button(main_frame, text="Submit Admission Order", command=submit_order)
     apply_styles(submit_btn)
     submit_btn.grid(row=4, column=0, columnspan=2, pady=15)
-
 
 # <<< REPLACE the placeholder select_room_gui with this >>>
 def select_room_gui(parent_window, conn):
@@ -5062,6 +5162,7 @@ def process_admission_gui(conn, receptionist_username):
     load_pending_orders()
 
     proc_window.mainloop()
+
 def room_management_gui(conn):
     """GUI quản lý phòng (cho receptionist)"""
     room_window = tk.Toplevel()
@@ -5517,6 +5618,9 @@ def view_services_gui(conn):
     search_window = tk.Frame(view_window, bg=BG_COLOR)
     search_window.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     # Service ID Label and Entry
     tk.Label(search_window, text="Service ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
     entry_id = tk.Entry(search_window)
@@ -5539,12 +5643,13 @@ def view_services_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def load_data():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         service_id = entry_id.get().strip()
         service_name = entry_name.get().strip()
 
         success, result = search_services(conn, service_id, service_name)
         if success and result:
-            tree.delete(*tree.get_children())
             for service in result:
                 tree.insert("", tk.END, values=(
                     service["ServiceID"],
@@ -5554,7 +5659,7 @@ def view_services_gui(conn):
                     service["Description"]
                 ))
         else:
-            messagebox.showinfo("Result", "No services found matching the criteria.")
+            error_label.config(text="No services found matching the criteria.")
             view_window.lift()
             view_window.focus_force()
             return
@@ -5567,74 +5672,212 @@ def view_services_gui(conn):
     view_window.after(100, load_data)  # Automatically trigger search on window open
 
 # PatientService GUI Functions
-def add_patient_service_gui(conn):
-    """GUI for adding a service to a patient"""
-    add_window = tk.Toplevel()
-    add_window.title("Add Service to Patient")
-    add_window.geometry("400x400")
-    add_window.config(bg=BG_COLOR)
-    center_window(add_window)
-    add_window.lift()
-    add_window.attributes('-topmost', True)
-    add_window.after(100, lambda: add_window.attributes('-topmost', False))
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime
 
-    # Main frame
-    main_frame = tk.Frame(add_window, bg=BG_COLOR)
+def create_patient_services_gui(conn, doctor_id=None):
+    """GUI thêm dịch vụ cho bệnh nhân"""
+    svc_window = tk.Toplevel()
+    svc_window.title("Add Patient Services")
+    svc_window.state('zoomed')
+    svc_window.config(bg=BG_COLOR)
+    center_window(svc_window)
+    svc_window.lift()
+    svc_window.attributes('-topmost', True)
+    svc_window.after(100, lambda: svc_window.attributes('-topmost', False))
+
+    # Main Frame
+    main_frame = tk.Frame(svc_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    labels = [
-        "Patient ID:", "Service ID:", "Doctor ID:",
-        "Service Date (YYYY-MM-DD):", "Quantity:",
-        "Cost at Time (VND):", "Notes:"
-    ]
-    entries = []
+    # Title
+    tk.Label(
+        main_frame, text="Add Services for Patient",
+        font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR
+    ).pack(pady=(0, 20))
 
-    for idx, text in enumerate(labels):
-        tk.Label(main_frame, text=text, bg=BG_COLOR).grid(row=idx, column=0, sticky="e", pady=5)
-        if text == "Notes:":
-            entry = tk.Text(main_frame, height=4, width=30)
-            entry.grid(row=idx, column=1, pady=5, padx=5, sticky="ew")
-            apply_styles(entry)
-        else:
-            entry = tk.Entry(main_frame)
-            entry.grid(row=idx, column=1, pady=5, padx=5, sticky="ew")
-            apply_styles(entry)
-        entries.append(entry)
+    # Form Frame
+    form_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    form_frame.pack(fill=tk.X, pady=(0, 15))
+    form_frame.columnconfigure(1, weight=1)
 
-    def submit():
-        try:
-            patient_id = entries[0].get().strip()
-            service_id = entries[1].get().strip()
-            doctor_id = entries[2].get().strip()
-            service_date = entries[3].get().strip()
-            quantity = entries[4].get()
-            cost_at_time = entries[5].get()
-            notes = entries[6].get("1.0", tk.END).strip()
+    # Patient ID
+    tk.Label(form_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5, padx=(0, 5))
+    patient_id_entry = tk.Entry(form_frame)
+    patient_id_entry.grid(row=0, column=1, pady=5, sticky="ew")
+    apply_styles(patient_id_entry)
 
-            if not all([patient_id, service_id, doctor_id, service_date]):
-                raise ValueError("All fields except 'Notes' are required.")
+    # Appointment ID (optional)
+    tk.Label(form_frame, text="Appointment ID (optional):", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5, padx=(0, 5))
+    appointment_id_entry = tk.Entry(form_frame)
+    appointment_id_entry.grid(row=1, column=1, pady=5, sticky="ew")
+    apply_styles(appointment_id_entry)
 
-            # Validate date format
-            datetime.strptime(service_date, "%Y-%m-%d")
+    # Notes
+    tk.Label(form_frame, text="Notes:", bg=BG_COLOR).grid(row=2, column=0, sticky="ne", pady=5, padx=(0, 5))
+    notes_entry = tk.Text(form_frame, height=4, width=40)
+    notes_entry.grid(row=2, column=1, pady=5, sticky="ew")
+    apply_styles(notes_entry)
+    # Scrollbar for Text widget (correct usage)
+    scrollbar = ttk.Scrollbar(form_frame, orient="vertical", command=notes_entry.yview)
+    scrollbar.grid(row=2, column=2, sticky="ns")
+    notes_entry.config(yscrollcommand=scrollbar.set)
 
-        except ValueError as ve:
-            messagebox.showerror("Error", str(ve))
-            add_window.lift()
-            add_window.focus_force()
+
+    # Service Frame
+    svc_frame = tk.LabelFrame(main_frame, text="Services Used", bg=BG_COLOR, fg=TEXT_COLOR, padx=10, pady=10)
+    svc_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+
+    columns = ("Service", "Quantity", "Price", "Notes")
+
+    # Scrollbar for Treeview (correct usage)
+    svc_scrollbar = ttk.Scrollbar(svc_frame, orient="vertical")
+    svc_scrollbar.pack(side="right", fill="y")
+
+    svc_tree = ttk.Treeview(svc_frame, columns=columns, show="headings", yscrollcommand=svc_scrollbar.set)
+    for col in columns:
+        svc_tree.heading(col, text=col)
+        svc_tree.column(col, width=150 if col != "Notes" else 200, anchor="w")
+    svc_tree.pack(side="left", fill="both", expand=True)
+
+    svc_scrollbar.config(command=svc_tree.yview)
+
+    # Controls
+    svc_controls = tk.Frame(main_frame, bg=BG_COLOR)
+    svc_controls.pack(fill=tk.X, pady=5)
+
+    tk.Label(svc_controls, text="Service:", bg=BG_COLOR).grid(row=0, column=0, padx=5, sticky='e')
+    service_var = tk.StringVar()
+    service_dropdown = ttk.Combobox(svc_controls, textvariable=service_var, width=30, state='readonly')
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT ServiceID, ServiceName FROM Services ORDER BY ServiceID")
+            services = cursor.fetchall()
+            service_dropdown['values'] = [f"{s['ServiceID']} - {s['ServiceName']}" for s in services]
+    except Exception as e:
+        messagebox.showerror("Error", f"Could not load services: {e}", parent=svc_window)
+    service_dropdown.grid(row=0, column=1, padx=5, pady=2, sticky='ew')
+
+    tk.Label(svc_controls, text="Quantity:", bg=BG_COLOR).grid(row=1, column=0, padx=5, sticky='e')
+    quantity_entry = tk.Entry(svc_controls, width=10)
+    quantity_entry.grid(row=1, column=1, padx=5, pady=2, sticky='ew')
+    apply_styles(quantity_entry)
+
+    tk.Label(svc_controls, text="Notes:", bg=BG_COLOR).grid(row=2, column=0, padx=5, sticky='e')
+    svc_note_entry = tk.Entry(svc_controls)
+    svc_note_entry.grid(row=2, column=1, columnspan=2, padx=5, pady=2, sticky='ew')
+    apply_styles(svc_note_entry)
+
+    def add_service():
+        svc = service_var.get()
+        qty = quantity_entry.get().strip()
+        note = svc_note_entry.get().strip()
+
+        if not svc or not qty:
+            messagebox.showwarning("Warning", "Please select a service and quantity.", parent=svc_window)
             return
 
-        success, message = add_patient_service(conn, patient_id, service_id, doctor_id, service_date, quantity, cost_at_time, notes)
-        if success:
-            messagebox.showinfo("Success", message)
-            add_window.destroy()
-        else:
-            messagebox.showerror("Error", message)
-            add_window.lift()
-            add_window.focus_force()
+        try:
+            with conn.cursor() as cursor:
+                service_id = svc.split(" - ")[0]
+                cursor.execute("SELECT ServiceCost FROM Services WHERE ServiceID = %s", (service_id,))
+                result = cursor.fetchone()
 
-    submit_btn = tk.Button(main_frame, text="Add Service to Patient", command=submit)
+            if not result:
+                raise ValueError("Service not found")
+            
+            service_cost = result["ServiceCost"]
+
+            qty_int = int(qty)
+            if qty_int <= 0:
+                raise ValueError()
+
+            svc_tree.insert("", "end", values=(svc, qty_int, float(service_cost*qty_int), note or ""))
+            clear_service_fields()
+
+        except ValueError:
+            messagebox.showerror("Invalid Input", "Quantity must be a positive integer and service must exist.", parent=svc_window)
+        except Exception as e:
+            messagebox.showerror("Error", f"Could not add service: {e}", parent=svc_window)
+
+    def clear_service_fields():
+        service_var.set("")
+        quantity_entry.delete(0, tk.END)
+        svc_note_entry.delete(0, tk.END)
+
+    def remove_service():
+        selected = svc_tree.selection()
+        if selected:
+            for item in selected:
+                svc_tree.delete(item)
+        else:
+            messagebox.showinfo("Info", "Please select a service to remove.", parent=svc_window)
+
+    btn_frame = tk.Frame(svc_controls, bg=BG_COLOR)
+    btn_frame.grid(row=3, column=0, columnspan=3, pady=10)
+    tk.Button(btn_frame, text="Add Service", command=add_service).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="Remove Selected", command=remove_service).pack(side=tk.LEFT, padx=5)
+    tk.Button(btn_frame, text="Clear Fields", command=clear_service_fields).pack(side=tk.LEFT, padx=5)
+
+    def submit_services():
+        patient_id = patient_id_entry.get().strip()
+        appointment_id = appointment_id_entry.get().strip() or None
+        notes = notes_entry.get("1.0", tk.END).strip() or None
+        if not patient_id:
+            messagebox.showerror("Error", "Patient ID is required", parent=svc_window)
+            return
+        try:
+            patient_id_int = int(patient_id)
+        except:
+            messagebox.showerror("Error", "Invalid Patient ID", parent=svc_window)
+            return
+
+        if appointment_id:
+            try:
+                appointment_id = int(appointment_id)
+            except:
+                messagebox.showerror("Error", "Invalid Appointment ID", parent=svc_window)
+                return
+
+        service_items = svc_tree.get_children()
+        if not service_items:
+            messagebox.showwarning("Warning", "Please add at least one service.", parent=svc_window)
+            return
+
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT PatientID FROM Patients WHERE PatientID = %s", (patient_id_int,))
+                if not cursor.fetchone():
+                    messagebox.showerror("Error", f"Patient ID {patient_id_int} not found.", parent=svc_window)
+                    return
+
+                # Insert logic here
+                # Example: Insert into PatientService (you must adapt with your schema)
+                for item in service_items:
+                    values = svc_tree.item(item)["values"]
+                    service_id = int(values[0].split(" - ")[0])
+                    service_cost = float(values[2])
+                    service_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')                   
+                    quantity = int(values[1])
+                    service_note = values[3]
+                    cursor.execute("""
+                        INSERT INTO PatientServices (PatientID, ServiceID, DoctorID, ServiceDate, Quantity, CostAtTime, Notes)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                        (patient_id_int, service_id, doctor_id, service_date, quantity, service_cost, service_note)
+                    )
+                    
+                conn.commit()
+                messagebox.showinfo("Success", "Services added successfully!", parent=svc_window)
+                svc_window.destroy()
+
+        except Exception as e:
+            conn.rollback()
+            messagebox.showerror("Database Error", f"Failed to add services: {e}", parent=svc_window)
+
+    submit_btn = tk.Button(main_frame, text="Submit Services", command=submit_services)
     apply_styles(submit_btn)
-    submit_btn.grid(row=len(labels), columnspan=2, pady=10)
+    submit_btn.pack(pady=10)
 
 def delete_patient_service_gui(conn):
     """GUI for deleting a service from a patient"""
@@ -5678,56 +5921,76 @@ def delete_patient_service_gui(conn):
     submit_btn.pack(pady=10)
 
 def view_patient_services_gui(conn):
-    """GUI for viewing all services used by a patient"""
+    """GUI to view all services used by a patient"""
     view_window = tk.Toplevel()
-    view_window.title("View Patient Services")
-    view_window.geometry("400x250")
+    view_window.title("Patient Service History")
+    view_window.geometry("900x500")
     view_window.config(bg=BG_COLOR)
     center_window(view_window)
     view_window.lift()
     view_window.attributes('-topmost', True)
     view_window.after(100, lambda: view_window.attributes('-topmost', False))
 
-    # Title
-    title_label = tk.Label(
-        view_window, text="View Services for a Patient",
-        font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(10, 0))
+    tk.Label(view_window, text="Patient Service History", font=TITLE_FONT, bg=BG_COLOR, fg=ACCENT_COLOR).pack(pady=10)
 
-    # Main frame
-    main_frame = tk.Frame(view_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+    # Search frame
+    search_frame = tk.Frame(view_window, bg=BG_COLOR)
+    search_frame.pack(pady=5)
 
-    form_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    form_frame.pack(fill=tk.X, pady=10)
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
 
-    tk.Label(form_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
-    entry_patient_id = tk.Entry(form_frame)
-    entry_patient_id.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_patient_id)
+    tk.Label(search_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, padx=5)
+    patient_id_entry = tk.Entry(search_frame)
+    patient_id_entry.grid(row=0, column=1, padx=5)
+    apply_styles(patient_id_entry)
 
-    def submit():
-        patient_id = entry_patient_id.get()
-        success, message = search_patient_services(conn, patient_id)
-        if success:
-            messagebox.showinfo("Success", message, parent=view_window)
-            view_window.destroy()
+    tk.Label(search_frame, text="Patient Name:", bg=BG_COLOR).grid(row=0, column=2, padx=5)
+    patient_name_entry = tk.Entry(search_frame)
+    patient_name_entry.grid(row=0, column=3, padx=5)
+    apply_styles(patient_name_entry)
+
+    # Treeview
+    columns = ("Patient Service ID", "Patient Name", "Service Name", "Service Date", "Quantity", "Service Cost")
+    tree = ttk.Treeview(view_window, columns=columns, show='headings')
+
+    col_widths = [100, 100, 250, 100, 50, 100]
+    for col, width in zip(columns, col_widths):
+        tree.heading(col, text=col)
+        tree.column(col, width=width, anchor=tk.W)
+
+    tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
+
+    def load_data():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
+        patient_id = patient_id_entry.get().strip()
+        patient_name = patient_name_entry.get().strip()
+
+        success, result = search_patient_services(conn, patient_id, patient_name)
+        if success and result:
+            for row in result:
+                tree.insert("", tk.END, values=(
+                    row["PatientServiceID"], row["PatientName"], row["ServiceName"], row["ServiceDate"], row["Quantity"], f"${row['ServiceCost']:.2f}"
+                ))
+        elif success:
+            error_label.config(text="No services found for this patient.")
         else:
-            messagebox.showerror("Error", message, parent=view_window)
-            view_window.lift()
-            view_window.focus_force()
+            error_label.config(text=result)
 
-    submit_btn = tk.Button(main_frame, text="View Patient Services", command=submit)
-    apply_styles(submit_btn)
-    submit_btn.pack(pady=10)
+    # Search button
+    search_btn = tk.Button(search_frame, text="Search", command=load_data)
+    apply_styles(search_btn)
+    search_btn.grid(row=0, column=4, padx=10)
+
+    view_window.after(100, load_data)
 
 # Prescription GUI Functions
-def create_prescription_gui(conn, doctor_id):
+def create_prescription_gui(conn, doctor_id=None):
     """GUI tạo đơn thuốc mới (cho bác sĩ)"""
     pres_window = tk.Toplevel()
     pres_window.title("Create New Prescription")
-    pres_window.geometry("1000x750")
+    pres_window.state('zoomed')
     pres_window.config(bg=BG_COLOR)
     center_window(pres_window)
     pres_window.lift()
@@ -5813,7 +6076,7 @@ def create_prescription_gui(conn, doctor_id):
     # Load medicines
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT MedicineID, MedicineName FROM Medicine ORDER BY MedicineName")
+            cursor.execute("SELECT MedicineID, MedicineName FROM Medicine ORDER BY MedicineID")
             medicines = cursor.fetchall()
             med_dropdown['values'] = [f"{m['MedicineID']} - {m['MedicineName']}" for m in medicines]
     except MySQLError as e:
@@ -5992,13 +6255,17 @@ def create_prescription_gui(conn, doctor_id):
     apply_styles(submit_btn)
     submit_btn.pack(pady=10)
 
-def view_prescription_gui(conn, prescription_id):
+import tkinter.simpledialog as simpledialog
+
+def view_prescription_gui(conn):
+    prescription_id = simpledialog.askinteger("Input", "Enter Prescription ID:")
+    if not prescription_id:
+        return
     """GUI xem và xuất đơn thuốc"""
     view_window = tk.Toplevel()
     view_window.title(f"Prescription #{prescription_id}")
     view_window.geometry("800x600")
     view_window.config(bg=BG_COLOR)
-    center_window(view_window)
     view_window.lift()
     view_window.attributes('-topmost', True)
     view_window.after(100, lambda: view_window.attributes('-topmost', False))
@@ -6102,47 +6369,26 @@ def view_prescription_gui(conn, prescription_id):
                 text_area.insert(tk.END, f"BHYT Card: {insurance['BHYTCardNumber'] or 'N/A'}\n")
                 text_area.insert(tk.END, f"Coverage: {insurance['CoverageDetails']}\n")
                 text_area.insert(tk.END, f"Valid: {insurance['EffectiveDate']} to {insurance['EndDate']}\n")
-                text_area.insert(tk.END, "\nNote: Cost will be calculated when an invoice is created.\n")
+                text_area.insert(tk.END, "Note: Cost will be calculated when an invoice is created.\n")
             else:
                 text_area.insert(tk.END, "No valid insurance found at the time of prescription.\n")
 
-            # Styling
-            text_area.tag_config("title", font=("Helvetica", 14, "bold"))
-            text_area.tag_config("subtitle", font=("Helvetica", 12, "bold"))
-            text_area.config(state=tk.DISABLED)
+    except Exception as e:
+        messagebox.showerror("Error", f"Error fetching prescription details: {e}")
 
-    except MySQLError as e:
-        messagebox.showerror("Database Error", f"Failed to fetch prescription: {e}")
-        view_window.destroy()
-        return
+    # Export button
+    def on_export_pdf():
+        export_prescription_pdf(conn, prescription_id)
+        messagebox.showinfo("Success", "Prescription exported to PDF")
 
-    # Buttons
-    button_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    button_frame.pack(fill=tk.X, pady=10)
-
-    export_btn = tk.Button(
-        button_frame,
-        text="Export to PDF",
-        command=lambda: export_prescription_pdf(conn, prescription_id),
-        width=15
-    )
-    apply_styles(export_btn)
-    export_btn.pack(side=tk.LEFT, padx=10)
-
-    close_btn = tk.Button(
-        button_frame,
-        text="Close",
-        command=view_window.destroy,
-        width=15
-    )
-    apply_styles(close_btn)
-    close_btn.pack(side=tk.RIGHT, padx=10)
+    export_button = tk.Button(view_window, text="Export to PDF", font=("Arial", 12), command=on_export_pdf)
+    export_button.pack(pady=10)
 
 def view_prescriptions_gui(conn):
     """GUI xem danh sách đơn thuốc (chỉ xem)"""
     prescriptions_window = tk.Toplevel()
     prescriptions_window.title("Prescriptions")
-    prescriptions_window.geometry("900x600")
+    prescriptions_window.geometry("1000x750")
     prescriptions_window.config(bg=BG_COLOR)
     center_window(prescriptions_window)
     prescriptions_window.lift()
@@ -6152,24 +6398,6 @@ def view_prescriptions_gui(conn):
     # Main frame
     main_frame = tk.Frame(prescriptions_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-
-    # Search frame
-    search_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    search_frame.pack(fill=tk.X, pady=10)
-
-    tk.Label(search_frame, text="Patient ID:", bg=BG_COLOR).pack(side=tk.LEFT)
-    patient_id_entry = tk.Entry(search_frame)
-    patient_id_entry.pack(side=tk.LEFT, padx=5)
-    apply_styles(patient_id_entry)
-
-    search_btn = tk.Button(
-        search_frame,
-        text="Search",
-        command=lambda: list_prescriptions(conn, patient_id_entry.get(), text_area),
-        width=10
-    )
-    apply_styles(search_btn)
-    search_btn.pack(side=tk.LEFT, padx=5)
 
     # Results area
     text_area = create_scrollable_text(main_frame, height=25, width=100)
@@ -6363,6 +6591,7 @@ def create_invoice_gui(conn):
     selected_room_info = {'id': None, 'name': 'N/A', 'rate': 0.0}
     # Initialize original_costs with floats
     original_costs = {'prescription': 0.0, 'room': 0.0, 'service': 0.0}
+    discounted_cost = {'prescription': 0.0, 'room': 0.0, 'service': 0.0}
     calculated_costs = {'discount': 0.0, 'final_amount': 0.0, 'notes': ""}
     all_services_list = []
     room_availability_data = []
@@ -6432,7 +6661,6 @@ def create_invoice_gui(conn):
     svc_tree.column("raw_price", width=0, stretch=tk.NO)
 
     tk.Label(svc_right_frame, text="Service:", bg=BG_COLOR, font=LABEL_FONT).pack(anchor='w'); service_var = tk.StringVar(); service_combo = ttk.Combobox(svc_right_frame, textvariable=service_var, state="readonly", width=25, font=LABEL_FONT); service_combo.pack(pady=5)
-    tk.Label(svc_right_frame, text="Qty:", bg=BG_COLOR, font=LABEL_FONT).pack(anchor='w'); service_qty_entry = tk.Entry(svc_right_frame, width=10, font=LABEL_FONT); service_qty_entry.pack(pady=5); service_qty_entry.insert(0, "1"); apply_styles(service_qty_entry)
     add_svc_btn = tk.Button(svc_right_frame, text="Add Service"); add_svc_btn.pack(pady=10); apply_styles(add_svc_btn)
     remove_svc_btn = tk.Button(svc_right_frame, text="Remove Selected"); remove_svc_btn.pack(pady=5); apply_styles(remove_svc_btn)
 
@@ -6524,25 +6752,27 @@ def create_invoice_gui(conn):
         main_frame.update_idletasks(); canvas.config(scrollregion=canvas.bbox("all")); canvas.yview_moveto(0)
 
     def search_patient_action():
-        search_term = patient_search_entry.get().strip();
-        if not search_term: return messagebox.showwarning("Input Required", "Enter Patient Name/ID.")
+        search_term = patient_search_entry.get().strip()
+        if not search_term: 
+            return messagebox.showwarning("Input Required", "Enter Patient Name/ID.")
         clear_all_details()
         try:
             p_id = int(search_term) if search_term.isdigit() else None
-            success, result = search_patient(conn, patient_id=p_id, name=None if p_id else search_term)
+            success, result = search_patients(conn, patient_id=p_id, name=None if p_id else search_term)
             if not success or not result: return messagebox.showinfo("Not Found", f"Patient not found: '{search_term}'.")
             patient_data = result[0]
             if len(result) > 1: messagebox.showinfo("Multiple Found", "Using first result.")
             p_id = patient_data['PatientID']; p_name = patient_data['PatientName']; p_dob = patient_data['DateOfBirth']; p_phone = patient_data.get('PhoneNumber', 'N/A')
             current_patient_id.set(str(p_id)); patient_info_var.set(f"ID: {p_id} | Name: {p_name} | DoB: {p_dob} | Phone: {p_phone}")
-            load_prescription_details(p_id); display_insurance_info(p_id)
+            load_prescription_details(p_id); display_insurance_info(p_id); load_services_list(p_id)
             calculate_subtotals_action() # Calculate initial subtotals and update summary
             main_frame.update_idletasks(); canvas.config(scrollregion=canvas.bbox("all"))
         except Exception as e: messagebox.showerror("Search Error", f"Error: {str(e)}"); clear_all_details()
     search_btn.config(command=search_patient_action)
 
     def load_prescription_details(p_id):
-        for item in pres_tree.get_children(): pres_tree.delete(item)
+        for item in pres_tree.get_children(): 
+            pres_tree.delete(item)
         try:
             # This now calls the CORRECTED function in core_logic.py
             success, prescriptions_details = get_patient_prescriptions(conn, p_id) # Use the corrected function name
@@ -6644,57 +6874,113 @@ def create_invoice_gui(conn):
             room_subtotal_label.config(text="Error")
             return 0.0
 
-    def load_services_list():
+    def load_services_list(p_id):
         try:
-            success, services = get_all_services(conn)
-            if success and services:
-                all_services_list[:] = services
-                # Store service info along with display text
+            if not p_id:
+                service_combo['values'] = []
+                return
+            
+            patient_id_int = int(p_id)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT ps.PatientServiceID, s.ServiceName, ps.Quantity, s.ServiceCost, ps.CostAtTime
+                FROM PatientServices ps
+                JOIN Services s ON ps.ServiceID = s.ServiceID
+                WHERE ps.PatientID = %s AND ps.InvoiceID IS NULL
+            """, (patient_id_int,))
+            services = cursor.fetchall()
+            
+            if services:
+                all_services_list.clear()
                 service_display_list = []
-                for s in services:
-                    cost = float(s.get('ServiceCost', 0.0)) # Ensure float
-                    display_text = f"{s['ServiceName']} ({format_currency(cost)})"
+                for row in services:
+                    psid = row['PatientServiceID']
+                    sname = row['ServiceName']
+                    qty = int(row['Quantity'])
+                    cost = float(row['ServiceCost'])
+                    total_cost = cost * qty
+                    all_services_list.append({
+                        'PatientServiceID': psid,
+                        'ServiceName': sname,
+                        'Quantity': qty,
+                        'ServiceCost': cost,
+                        'Total': row['CostAtTime']
+                    })
+                    display_text = f"{sname} ×{qty} ({format_currency(total_cost)})"
                     service_display_list.append(display_text)
+
+
                 service_combo['values'] = service_display_list
+                if service_display_list:
+                    service_combo.current(0)
             else:
-                 messagebox.showerror("Service Load Error", "Could not load services list.")
+                service_combo['values'] = []
         except Exception as e:
             print(f"Error loading services: {e}")
             messagebox.showerror("Service Load Error", f"Error loading services: {e}")
-    load_services_list()
 
+    def add_selected_service():
+        selected_index = service_combo.current()
+        if selected_index == -1 or selected_index >= len(all_services_list):
+            messagebox.showwarning("No selection", "Please select a service to add.")
+            return
+
+        service = all_services_list[selected_index]
+        name = service['ServiceName']
+        price = service['ServiceCost']
+        qty = service['Quantity']
+        total = float(price) * int(qty)
+
+        svc_tree.insert("", "end", values=(
+            name,
+            format_currency(price),
+            qty,
+            format_currency(total),
+            total,  # raw_total (hidden)
+            price   # raw_price (hidden)
+        ))
+    add_svc_btn.config(command=add_selected_service)
+
+    def update_patientservices_invoice(patient_id_int, new_invoice_id):
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE PatientServices
+            SET InvoiceID = %s
+            WHERE PatientID = %s AND InvoiceID IS NULL
+        """, (new_invoice_id, patient_id_int))
+        conn.commit()
+    
     def add_service_action():
-        selected_text = service_var.get(); qty_str = service_qty_entry.get().strip()
-        if not selected_text: return messagebox.showwarning("Input Required", "Select service.")
-        if not current_patient_id.get(): return messagebox.showwarning("Patient Required", "Search patient first.")
-        try: qty = int(qty_str); assert qty > 0
-        except: return messagebox.showwarning("Input Error", "Quantity must be positive integer.")
-        try:
-            # Find the service details from the stored list based on display text
-            s_info = None
-            for s in all_services_list:
-                cost = float(s.get('ServiceCost', 0.0))
-                display_text = f"{s['ServiceName']} ({format_currency(cost)})"
-                if display_text == selected_text:
-                    s_info = s
-                    break
+        selected_index = service_combo.current()
+        if selected_index == -1:
+            return messagebox.showwarning("Input Required", "Please select a service.")
+        if not current_patient_id.get():
+            return messagebox.showwarning("Patient Required", "Search patient first.")
 
-            if s_info:
-                raw_price = float(s_info.get('ServiceCost', 0.0)) # Ensure float
-                raw_total = raw_price * qty
-                # Store raw price and raw total in hidden columns
-                svc_tree.insert("", tk.END, values=(
-                    s_info['ServiceName'],
-                    format_currency(raw_price), # Display formatted price
-                    qty,
-                    format_currency(raw_total), # Display formatted total
-                    raw_total,                  # Store raw total
-                    raw_price                   # Store raw price
-                ))
-                service_var.set(""); service_qty_entry.delete(0, tk.END); service_qty_entry.insert(0, "1")
-                calculate_subtotals_action() # Recalculate totals and summary
-            else: messagebox.showerror("Error", "Could not find service details for the selected item.")
-        except Exception as e: messagebox.showerror("Error Adding Service", f"Error: {str(e)}")
+        try:
+            # Get service info directly from the indexed list
+            s_info = all_services_list[selected_index]
+            raw_price = float(s_info.get('ServiceCost', 0.0))
+            qty = int(s_info.get('Quantity', 1))
+            assert qty > 0
+            raw_total = raw_price * qty
+
+            # Insert to the tree
+            svc_tree.insert("", tk.END, values=(
+                s_info['ServiceName'],
+                format_currency(raw_price),
+                qty,
+                format_currency(raw_total),
+                raw_total,   # hidden
+                raw_price    # hidden
+            ))
+
+            # Reset UI
+            service_var.set("")
+            service_combo.set("")
+            calculate_subtotals_action()
+        except Exception as e:
+            messagebox.showerror("Error Adding Service", f"Error: {str(e)}")
     add_svc_btn.config(command=add_service_action)
 
     def remove_service_action():
@@ -6748,6 +7034,8 @@ def create_invoice_gui(conn):
             med_after, med_disc_amt = calculate_discount_from_percentage(med_orig, med_perc)
             room_after, room_disc_amt = calculate_discount_from_percentage(room_orig, room_perc)
             svc_after, svc_disc_amt = calculate_discount_from_percentage(svc_orig, svc_perc)
+            
+            discounted_cost = {'prescription': med_after, 'room': room_after, 'service': svc_after}
 
             # Update discount labels
             med_discount_amount_label.config(text=format_currency(med_disc_amt))
@@ -6851,8 +7139,13 @@ def create_invoice_gui(conn):
         discount = float(calculated_costs.get('discount', 0.0))
         final_amount = float(calculated_costs.get('final_amount', 0.0))
 
+        
+        med_cost_f = float(discounted_cost.get('prescription', 0.0))
+        room_cost_f = float(discounted_cost.get('room', 0.0))
+        svc_cost_f = float(discounted_cost.get('service', 0.0))
+
         # Tạo notes chi tiết (bao gồm cả % đã áp dụng)
-        notes = f"--- INVOICE DETAILS (Patient ID: {p_id}) ---\n\n"
+        notes = f"--- INVOICE DETAILS (Patient ID: {p_id}) ---\n"
         notes += f"** Prescription Details (Original: {format_currency(med_cost_orig)}, Discount Applied: {med_discount_percent_entry.get()}%) **\n"
         if pres_tree.get_children():
             for i in pres_tree.get_children():
@@ -6877,15 +7170,22 @@ def create_invoice_gui(conn):
         notes += f"FINAL AMOUNT DUE: {format_currency(final_amount)}\n"
         calculated_costs['notes'] = notes
 
+        if discount>0:
+            bhyt=1
+        else:
+            bhyt=0
+
         # Gọi hàm lưu từ core_logic (Pass original costs and final calculated amounts)
         success, message, new_invoice_id = save_calculated_invoice(
             conn, p_id,
-            med_cost_orig, room_cost_orig, svc_cost_orig, # Pass original costs
-            discount, final_amount, # Pass calculated discount and final amount
-            notes
+            room_cost_f, med_cost_f, svc_cost_f,# Pass original costs
+            final_amount, # Pass calculated discount and final amount
+            notes, bhyt
         )
         if success: messagebox.showinfo("Success", f"Invoice #{new_invoice_id} created!"); invoice_window.destroy()
         else: messagebox.showerror("Save Error", f"Failed to save invoice: {message}")
+        update_patientservices_invoice(p_id, new_invoice_id)
+
 
     create_invoice_btn.config(command=save_invoice_action)
 
@@ -6899,6 +7199,7 @@ def create_invoice_gui(conn):
     calculate_subtotals_action()
 
     invoice_window.mainloop()
+
 #report
 # Emergency GUI function
 def add_emergency_contact_gui(conn):
@@ -6959,8 +7260,9 @@ def add_emergency_contact_gui(conn):
         else:
             messagebox.showerror("Error", message)
             emergency_window.lift()
-            emergency_window.focus_force()
-        
+        emergency_window.attributes('-topmost', True) # Keep on top of other windows
+        emergency_window.after(100, lambda: emergency_window.attributes('-topmost', False))
+            
     # Submit button
     submit_button = tk.Button(main_frame, text="Add Emergency Contact", command=submit_contact)
     submit_button.grid(row=4, columnspan=2, pady=(10, 0))
@@ -7141,7 +7443,7 @@ def view_emergency_contacts_gui(conn):
         tree.delete(*tree.get_children())
 
         if not patient_id:
-            messagebox.showwarning("Input Error", "❗ Please enter a valid Patient ID.")
+            messagebox.showwarning("Input Error", "Please enter a valid Patient ID.")
             view_window.lift() # Bring the window to the front
             view_window.focus_force() # Bring the window to the front
             return
@@ -7183,6 +7485,9 @@ def view_medicine_gui(conn):
     search_frame = tk.Frame(view_window, bg=BG_COLOR)
     search_frame.pack(pady=5)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     tk.Label(search_frame, text="Medicine ID:", bg=BG_COLOR).grid(row=0, column=0, padx=5, sticky='w')
     id_entry = tk.Entry(search_frame)
     id_entry.grid(row=0, column=1, padx=5)
@@ -7204,11 +7509,12 @@ def view_medicine_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def search():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         medicine_id = id_entry.get().strip() or None
         medicine_name = name_entry.get().strip() or None
         success, result = search_medicine(conn, medicine_id, medicine_name)
         if success:
-            tree.delete(*tree.get_children())
             for row in result:
                 tree.insert("", tk.END, values=(
                     row["MedicineID"],
@@ -7218,7 +7524,7 @@ def view_medicine_gui(conn):
                     row["MedicineCost"]
                 ))
         else:
-            messagebox.showerror("Error", f"Failed to search medicines: {result}")
+            error_label.config(text=f"Failed to search medicines: {result}")
             view_window.lift()
             view_window.focus_force()
 
@@ -7475,8 +7781,8 @@ def add_medicine_batch_gui(conn):
 def update_medicine_batch_gui(conn):
     """GUI for updating medicine batch"""
     prompt_window = tk.Toplevel()
-    prompt_window.title("Enter Batch ID")
-    prompt_window.geometry("300x150")
+    prompt_window.title("Update Medicine Batch")
+    prompt_window.geometry("350x320")
     prompt_window.config(bg=BG_COLOR)
     center_window(prompt_window)
     prompt_window.lift()
@@ -7487,60 +7793,41 @@ def update_medicine_batch_gui(conn):
     main_frame = tk.Frame(prompt_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    form_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    form_frame.pack(fill=tk.X)
+    # Entry fields
+    fields = {
+        "Batch ID": tk.Entry(main_frame),
+        "Medicine ID": tk.Entry(main_frame),
+        "Batch Number": tk.Entry(main_frame),
+        "Expiry Date (YYYY-MM-DD)": tk.Entry(main_frame),
+        "Quantity": tk.Entry(main_frame),
+        "Medicine Cost (VND)": tk.Entry(main_frame),
+    }
 
-    # Batch ID
-    tk.Label(main_frame, text="Batch ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
-    entry_batch_id = tk.Entry(main_frame)
-    entry_batch_id.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_batch_id)
+    for i, (label, entry) in enumerate(fields.items()):
+        tk.Label(main_frame, text=label + ":", bg=BG_COLOR).grid(row=i, column=0, sticky="e", pady=5)
+        entry.grid(row=i, column=1, pady=5, padx=5, sticky="ew")
+        apply_styles(entry)
 
-    # Medicine ID
-    tk.Label(main_frame, text="Medicine ID:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
-    entry_medicine_id = tk.Entry(main_frame)
-    entry_medicine_id.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_medicine_id)
-
-    # Batch number
-    tk.Label(main_frame, text="Batch Number:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
-    entry_batch_number = tk.Entry(main_frame)
-    entry_batch_number.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_batch_number)
-
-    # Expiry date
-    tk.Label(main_frame, text="Expiry Date (YYYY-MM-DD):", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
-    entry_expiry_date = tk.Entry(main_frame)
-    entry_expiry_date.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_expiry_date)
-
-    # Quantity
-    tk.Label(main_frame, text="Quantity:", bg=BG_COLOR).grid(row=4, column=0, sticky="e", pady=5)
-    entry_quantity = tk.Entry(main_frame)
-    entry_quantity.grid(row=4, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_quantity)
-
-    # Cost
-    tk.Label(main_frame, text="Cost (VND):", bg=BG_COLOR).grid(row=5, column=0, sticky="e", pady=5)
-    entry_cost = tk.Entry(main_frame)
-    entry_cost.grid(row=5, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_cost)
-
+    # Button
     def submit():
-        batch_id = entry_batch_id.get().strip()
-        medicine_id = entry_medicine_id.get().strip()
-        batch_number = entry_batch_number.get().strip()
-        expiry_date = entry_expiry_date.get().strip()
-        quantity = entry_quantity.get().strip()
-        cost = entry_cost.get().strip()
-
+        values = {label: entry.get().strip() for label, entry in fields.items()}
+        batch_id = values["Batch ID"]
         if not batch_id:
             messagebox.showerror("Error", "Batch ID is required.")
             prompt_window.lift()
             prompt_window.focus_force()
             return
 
-        success, message = update_medicine_batch(conn, batch_id, medicine_id, batch_number, expiry_date, quantity, cost)
+        success, message = update_medicine_batch(
+            conn,
+            batch_id,
+            values["Medicine ID"],
+            values["Batch Number"],
+            values["Expiry Date (YYYY-MM-DD)"],
+            values["Quantity"],
+            values["Medicine Cost (VND)"]
+        )
+
         if success:
             messagebox.showinfo("Success", message)
             prompt_window.destroy()
@@ -7550,7 +7837,7 @@ def update_medicine_batch_gui(conn):
             prompt_window.focus_force()
 
     submit_button = tk.Button(main_frame, text="Update Batch", command=submit)
-    submit_button.grid(row=6, columnspan=2, pady=(10, 0))
+    submit_button.grid(row=len(fields), columnspan=2, pady=(10, 0))
     apply_styles(submit_button)
 
 def delete_medicine_batch_gui(conn):
@@ -7619,6 +7906,9 @@ def view_medicine_batches_gui(conn):
     search_frame = tk.Frame(main_frame, bg=BG_COLOR)
     search_frame.pack(fill=tk.X, pady=10)
 
+    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    error_label.pack()
+
     # Lọc theo BatchID, ExpiryDate, và Status
     tk.Label(search_frame, text="Batch ID:", bg=BG_COLOR).pack(side=tk.LEFT)
     batch_id_entry = tk.Entry(search_frame)
@@ -7646,13 +7936,14 @@ def view_medicine_batches_gui(conn):
     tree.pack(fill=tk.BOTH, expand=True, padx=20, pady=10)
 
     def search():
+        error_label.config(text="")
+        tree.delete(*tree.get_children())
         batch_id = batch_id_entry.get().strip() or None
         expiry_date = expiry_date_entry.get().strip() or None
         status = status_entry.get().strip() or None
 
         success, result = search_medicine_batches(conn, batch_id, expiry_date, status)
         if success and result:
-            tree.delete(*tree.get_children())
             for batch in result:
                 tree.insert("", tk.END, values=(
                     batch["BatchID"],
@@ -7666,7 +7957,7 @@ def view_medicine_batches_gui(conn):
                     batch["Status"]
                 ))
         else:
-            messagebox.showinfo("Result", "No batches found matching the criteria.")
+            error_label.config(text="No batches found matching the criteria.")
             view_window.lift()
             view_window.focus_force()
 
@@ -7759,22 +8050,28 @@ def add_inventory_gui(conn):
     entry_unit.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_unit)
 
+    tk.Label(main_frame, text="Status:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
+    entry_status = tk.Entry(main_frame)
+    entry_status.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
+    apply_styles(entry_unit)
+
     def submit():
         try:
             item_name = entry_item_name.get().strip()
             quantity = entry_quantity.get().strip()
             unit = entry_unit.get().strip()
+            status = entry_status.get().strip()
 
-            if not item_name or not unit:
-                raise ValueError("Item name and unit are required.")
-            if quantity < 0:
+            if not item_name or not unit or not quantity:
+                raise ValueError("Item name, unit and quantity are required.")
+            if int(quantity) < 0:
                 raise ValueError("Quantity must be non-negative.")
         except ValueError as ve:
             messagebox.showerror("Error", str(ve))
             inventory_window.lift()
             return
 
-        result = add_inventory_item(conn, item_name, quantity, unit)
+        result = add_inventory_item(conn, item_name, quantity, unit, status)
         if result is None:
             messagebox.showerror("Error", "❌ Failed to add inventory item.")
         else:
@@ -7788,85 +8085,107 @@ def add_inventory_gui(conn):
 
     save_button = tk.Button(main_frame, text="Save", command=submit)
     apply_styles(save_button)
-    save_button.grid(row=3, columnspan=2, pady=(10, 0))
+    save_button.grid(row=4, columnspan=2, pady=(10, 0))
 
-def update_inventory_gui(conn, inventory_id=None):
-    """GUI for updating inventory"""
-    update_window = tk.Toplevel()
-    update_window.title("Update Inventory")
-    update_window.geometry("400x350")
-    update_window.config(bg=BG_COLOR)
-    center_window(update_window)
-    update_window.lift()
-    update_window.attributes('-topmost', True)
-    update_window.after(100, lambda: update_window.attributes('-topmost', False))
+# def update_inventory_gui(conn, inventory_id=None):
+#     """GUI for updating inventory"""
+#     update_window = tk.Toplevel()
+#     update_window.title("Update Inventory")
+#     update_window.geometry("400x350")
+#     update_window.config(bg=BG_COLOR)
+#     center_window(update_window)
+#     update_window.lift()
+#     update_window.attributes('-topmost', True)
+#     update_window.after(100, lambda: update_window.attributes('-topmost', False))
 
-    # Main frame
-    main_frame = tk.Frame(update_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+#     # Main frame
+#     main_frame = tk.Frame(update_window, bg=BG_COLOR)
+#     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    # Inventory ID
-    tk.Label(main_frame, text="Inventory ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
-    entry_inventory_id = tk.Entry(main_frame)
-    entry_inventory_id.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_inventory_id)
-    if inventory_id:
-        entry_inventory_id.insert(0, str(inventory_id))
+#     # Inventory ID
+#     tk.Label(main_frame, text="Inventory ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
+#     entry_inventory_id = tk.Entry(main_frame)
+#     entry_inventory_id.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
+#     apply_styles(entry_inventory_id)
+#     if inventory_id:
+#         entry_inventory_id.insert(0, str(inventory_id))
 
-    # Item Name (editable)
-    tk.Label(main_frame, text="Item Name:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
-    entry_item_name = tk.Entry(main_frame)
-    entry_item_name.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_item_name)
+#     # Item Name (editable)
+#     tk.Label(main_frame, text="Item Name:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
+#     entry_item_name = tk.Entry(main_frame)
+#     entry_item_name.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
+#     apply_styles(entry_item_name)
 
-    # Quantity
-    tk.Label(main_frame, text="Quantity:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
-    entry_quantity = tk.Entry(main_frame)
-    entry_quantity.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_quantity)
+#     # Quantity
+#     tk.Label(main_frame, text="Quantity:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
+#     entry_quantity = tk.Entry(main_frame)
+#     entry_quantity.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
+#     apply_styles(entry_quantity)
 
-    # Unit
-    tk.Label(main_frame, text="Unit:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
-    entry_unit = tk.Entry(main_frame)
-    entry_unit.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
-    apply_styles(entry_unit)
+#     # Unit
+#     tk.Label(main_frame, text="Unit:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
+#     entry_unit = tk.Entry(main_frame)
+#     entry_unit.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
+#     apply_styles(entry_unit)
 
-    # Load button
-    def load_inventory():
-        inv_id = entry_inventory_id.get()
-        if not inv_id:
-            messagebox.showerror("Error", "Please enter an inventory ID.")
-            return
+#     # Status
+#     tk.Label(main_frame, text="Status:", bg=BG_COLOR).grid(row=4, column=0, sticky="e", pady=5)
+#     entry_status = tk.Entry(main_frame)
+#     entry_status.grid(row=4, column=1, pady=5, padx=5, sticky="ew")
+#     apply_styles(entry_unit)
+
+    # # Load button
+    # def load_inventory():
+    #     inv_id = entry_inventory_id.get()
+    #     if not inv_id:
+    #         messagebox.showerror("Error", "Please enter an inventory ID.")
+    #         return
         
-        success, inventory_info = update_inventory_item(conn, inv_id)
-        if not success or not inventory_info:
-            messagebox.showerror("Error", "No inventory item found with this ID.")
-            return
+    #     success, inventory_info = update_inventory_item(conn, inv_id, )
+    #     if not success or not inventory_info:
+    #         messagebox.showerror("Error", "No inventory item found with this ID.")
+    #         return
 
-        entry_item_name.delete(0, tk.END)
-        entry_item_name.insert(0, inventory_info['ItemName'])
-        entry_quantity.delete(0, tk.END)
-        entry_quantity.insert(0, inventory_info['Quantity'])
-        entry_unit.delete(0, tk.END)
-        entry_unit.insert(0, inventory_info['Unit'])
+    #     entry_item_name.delete(0, tk.END)
+    #     entry_item_name.insert(0, inventory_info['ItemName'])
+    #     entry_quantity.delete(0, tk.END)
+    #     entry_quantity.insert(0, inventory_info['Quantity'])
+    #     entry_unit.delete(0, tk.END)
+    #     entry_unit.insert(0, inventory_info['Unit'])
+    #     entry_status.delete(0, tk.END)
+    #     entry_status.insert(0, inventory_info['Status'])
 
-    load_button = tk.Button(main_frame, text="Load Info", command=load_inventory)
-    apply_styles(load_button)
-    load_button.grid(row=4, columnspan=2, pady=(10, 0))
+    # load_button = tk.Button(main_frame, text="Load Info", command=load_inventory)
+    # apply_styles(load_button)
+    # load_button.grid(row=4, columnspan=2, pady=(10, 0))
 
     # Save button
-    def save_inventory():
-        inv_id = entry_inventory_id.get()
-        item_name = entry_item_name.get()
-        quantity = entry_quantity.get()
-        unit = entry_unit.get()
-        update_inventory_item(conn, inv_id, quantity, unit, item_name)
+    # def save_inventory():
+    #     item_name = entry_item_name.get().strip()
+    #     quantity = entry_quantity.get().strip()
+    #     unit = entry_unit.get().strip()
 
-    save_button = tk.Button(main_frame, text="Save", command=save_inventory)
-    apply_styles(save_button)
-    save_button.grid(row=5, columnspan=2, pady=(10, 0))
+    #     # Gọi hàm cập nhật
+    #     success, message = add_inventory_item(conn, item_name, quantity, unit, status)
+        
+    #     # Hiển thị kết quả
+    #     if success:
+    #         messagebox.showinfo("Success", message)
+    #         update_window.lift()
+    #         update_window.focus_force()
+    #     else:
+    #         messagebox.showerror("Error", message)
+    #         update_window.lift()
+    #         update_window.focus_force()
 
-    main_frame.grid_columnconfigure(1, weight=1)
+
+    # # Nút Save
+    # save_button = tk.Button(main_frame, text="Save", command=save_inventory)
+    # apply_styles(save_button)
+    # save_button.grid(row=6, columnspan=2, pady=(10, 0))
+
+    # main_frame.grid_columnconfigure(1, weight=1)
+
 
 def disable_inventory_item_gui(conn, inventory_id):
     """GUI for disabling inventory item"""
@@ -8429,6 +8748,93 @@ def view_invoices_gui(conn):
     # Configure grid weights
     filter_frame.grid_columnconfigure(1, weight=1)
 
+def view_and_print_invoices_by_patient(conn):
+    """GUI to view and print invoices by Patient ID"""
+    window = tk.Toplevel()
+    window.title("View & Print Invoices by Patient")
+    window.geometry("700x550")
+    window.config(bg=BG_COLOR)
+    center_window(window)
+    window.lift()
+    window.attributes('-topmost', True)
+    window.after(100, lambda: window.attributes('-topmost', False))
+
+    # Main frame
+    main_frame = tk.Frame(window, bg=BG_COLOR)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+    # Patient ID input
+    input_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    input_frame.pack(fill=tk.X, pady=5)
+    tk.Label(input_frame, text="Enter Patient ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", padx=5)
+    entry_patient = tk.Entry(input_frame)
+    entry_patient.grid(row=0, column=1, sticky="ew", padx=5)
+    apply_styles(entry_patient)
+    input_frame.grid_columnconfigure(1, weight=1)
+
+    # Text area for results
+    text_area = create_scrollable_text(main_frame, height=20, width=80)
+
+    # Function to fetch invoices
+    def fetch_invoices():
+        patient_id = entry_patient.get().strip()
+        if not patient_id.isdigit():
+            messagebox.showwarning("Invalid Input", "Please enter a valid Patient ID.")
+            return
+
+        success, result = view_invoices(conn, patient_id)
+        text_area.delete(1.0, tk.END)
+
+        if success:
+            if result:
+                for invoice in result:
+                    text_area.insert(tk.END, f"Invoice ID: {invoice['InvoiceID']}\n")
+                    text_area.insert(tk.END, f"Patient ID: {invoice['PatientID']}\n")
+                    text_area.insert(tk.END, f"Date: {invoice['InvoiceDate']}\n")
+                    text_area.insert(tk.END, f"Amount: {invoice['TotalAmount']:.2f} VND\n")
+                    text_area.insert(tk.END, f"Status: {invoice['PaymentStatus']}\n")
+                    text_area.insert(tk.END, "-" * 40 + "\n")
+            else:
+                text_area.insert(tk.END, "No invoices found for this patient.\n")
+        else:
+            messagebox.showerror("Error", result)
+
+    # Fetch button
+    fetch_btn = tk.Button(main_frame, text="Fetch Invoices", command=fetch_invoices)
+    apply_styles(fetch_btn)
+    fetch_btn.pack(pady=10)
+
+    # Print section
+    print_frame = tk.Frame(main_frame, bg=BG_COLOR)
+    print_frame.pack(pady=10, fill=tk.X)
+
+    tk.Label(print_frame, text="Enter Invoice ID to Print:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", padx=5)
+    entry_invoice_id = tk.Entry(print_frame)
+    entry_invoice_id.grid(row=0, column=1, sticky="ew", padx=5)
+    apply_styles(entry_invoice_id)
+
+    def print_invoice():
+        invoice_id = entry_invoice_id.get().strip()
+        if not invoice_id.isdigit():
+            messagebox.showwarning("Invalid Input", "Please enter a valid Invoice ID.")
+            return
+
+        file_path = f"Invoice_{invoice_id}.pdf"
+        success, msg = generate_invoice_pdf(conn, int(invoice_id), file_path)
+        if success:
+            messagebox.showinfo("Success", msg)
+            try:
+                os.startfile(file_path)  # Open PDF (on Windows)
+            except:
+                pass
+        else:
+            messagebox.showerror("Error", msg)
+
+    print_btn = tk.Button(print_frame, text="Print Invoice", command=print_invoice)
+    apply_styles(print_btn)
+    print_btn.grid(row=0, column=2, padx=10)
+    print_frame.grid_columnconfigure(1, weight=1)
+
 def export_prescription_pdf(conn, prescription_id):
     """Xuất đơn thuốc ra PDF"""
     from tkinter import filedialog
@@ -8449,6 +8855,7 @@ def export_prescription_pdf(conn, prescription_id):
         messagebox.showinfo("Success", f"Prescription exported to:\n{file_path}")
     else:
         messagebox.showerror("Error", message)
+
 def export_report_txt(report_title, report_period, content_widget):
     """Exports the content of a ScrolledText or Treeview widget to a TXT file."""
     file_path = filedialog.asksaveasfilename(
@@ -8636,7 +9043,6 @@ def generate_financial_report_gui(conn):
     # Generate initial report
     report_window.after(100, generate_report)
 
-
 def get_room_statistics_gui(conn):
     """GUI for displaying room utilization statistics"""
     stats_window = tk.Toplevel()
@@ -8768,7 +9174,6 @@ def get_room_statistics_gui(conn):
     export_btn = tk.Button(main_frame, text="Export to CSV", command=export_to_csv)
     apply_styles(export_btn)
     export_btn.pack(pady=10)
-
 
 def generate_statistics_gui(conn):
     """GUI for generating hospital statistics report"""
@@ -8955,6 +9360,7 @@ def generate_statistics_gui(conn):
             
             # Update the label in the frame
             appt_frame.winfo_children()[i].winfo_children()[1].config(text=new_value)
+
 def change_password_gui(conn, username):
     """GUI for changing password"""
     change_window = tk.Toplevel()
@@ -9026,54 +9432,6 @@ def logout_action(current_window):
     if messagebox.askokcancel("Logout", "Are you sure you want to logout?"):
         current_window.destroy()
         main()
-
-def main():
-    """Main application entry point"""
-    root = tk.Tk()
-    root.title("Hospital Management System")
-    root.geometry("400x300")
-    root.config(bg=BG_COLOR)
-    center_window(root)
-    
-    # Main frame
-    main_frame = tk.Frame(root, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
-    # Title
-    title_label = tk.Label(
-       main_frame,
-        text="Hospital Management System",
-        font=TITLE_FONT,
-        bg=BG_COLOR,
-        fg=ACCENT_COLOR
-    )
-    title_label.pack(pady=(0, 30))
-    
-    # Welcome message
-    welcome_label = tk.Label(
-        main_frame,
-        text="Welcome to the Hospital Management System",
-        font=LABEL_FONT,
-        bg=BG_COLOR,
-        fg=TEXT_COLOR
-    )
-    welcome_label.pack(pady=(0, 20))
-    
-    # Login button
-    login_btn = tk.Button(
-        main_frame,
-        text="Login",
-        command=lambda: open_login_window(root),
-        width=15
-    )
-    apply_styles(login_btn)
-    login_btn.pack(pady=10)
-    
-    # Initialize admin account if not exists
-    initialize_admin()
-    
-    root.mainloop()
- 
 
 if __name__ == "__main__":
     main()
