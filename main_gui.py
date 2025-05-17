@@ -7294,33 +7294,33 @@ def update_emergency_contact_gui(conn):
     apply_styles(entry_contact_id)
 
     # Patient ID
-    tk.Label(main_frame, text="Patient ID:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
+    tk.Label(main_frame, text="Patient ID:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
     entry_patient_id = tk.Entry(main_frame)
-    entry_patient_id.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
+    entry_patient_id.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_patient_id)
       
     # Emergency contact name
-    tk.Label(main_frame, text="Contact Name:", bg=BG_COLOR).grid(row=1, column=0, sticky="e", pady=5)
+    tk.Label(main_frame, text="Contact Name:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
     entry_contact_name = tk.Entry(main_frame)
-    entry_contact_name.grid(row=1, column=1, pady=5, padx=5, sticky="ew")
+    entry_contact_name.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_contact_name)
 
     # Relationship
-    tk.Label(main_frame, text="Relationship:", bg=BG_COLOR).grid(row=2, column=0, sticky="e", pady=5)
+    tk.Label(main_frame, text="Relationship:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
     entry_relationship = tk.Entry(main_frame)
-    entry_relationship.grid(row=2, column=1, pady=5, padx=5, sticky="ew")
+    entry_relationship.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_relationship)
 
     # Phone number
-    tk.Label(main_frame, text="Phone Number:", bg=BG_COLOR).grid(row=3, column=0, sticky="e", pady=5)
+    tk.Label(main_frame, text="Phone Number:", bg=BG_COLOR).grid(row=4, column=0, sticky="e", pady=5)
     entry_phone_number = tk.Entry(main_frame)
-    entry_phone_number.grid(row=3, column=1, pady=5, padx=5, sticky="ew")
+    entry_phone_number.grid(row=4, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_phone_number)
 
     # Address
-    tk.Label(main_frame, text="Address:", bg=BG_COLOR).grid(row=4, column=0, sticky="e", pady=5)
+    tk.Label(main_frame, text="Address:", bg=BG_COLOR).grid(row=5, column=0, sticky="e", pady=5)
     entry_address = tk.Entry(main_frame)
-    entry_address.grid(row=4, column=1, pady=5, padx=5, sticky="ew")
+    entry_address.grid(row=5, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_address)
 
     def submit_update():
@@ -7356,7 +7356,7 @@ def update_emergency_contact_gui(conn):
 
     # Submit button
     submit_button = tk.Button(main_frame, text="Update Emergency Contact", command=submit_update)
-    submit_button.grid(row=5, columnspan=2, pady=(10, 0))
+    submit_button.grid(row=6, columnspan=2, pady=(10, 0))
     apply_styles(submit_button)
 
 def delete_emergency_contact_gui(conn):
