@@ -1104,20 +1104,6 @@ def get_all_patients(conn):
         return [], f"❌ Failed to retrieve patients: {e}"
 
 # Department Management    
-def add_department(conn, name):
-    """Add a new department to the system"""
-    try:
-        with conn.cursor() as cursor:
-            if name:
-                cursor.execute("INSERT INTO Departments (DepartmentName) VALUES (%s)", (name,))
-                conn.commit()
-                return True, "✅ Department added successfully."
-            else:
-                return False, "❌ Department name cannot be empty."  # Thêm return ở đây
-    except MySQLError as e:
-        conn.rollback()
-        return False, f"❌ Failed to add department: {e}"
-
 def update_department(conn, dept_id, name):
     """Update department information"""
     try:
@@ -1139,18 +1125,36 @@ def update_department(conn, dept_id, name):
         conn.rollback()
         return False, f"❌ Failed to update department: {e}"
  
-def view_departments(conn):
-    """View all departments"""
+def add_department(conn, name):
+    """Add a new department to the system"""
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT d1.DepartmentID, d1.DepartmentName, COUNT(d2.DoctorID) AS DoctorCount FROM departments d1 JOIN doctors d2 ON d1.DepartmentID=d2.DepartmentID GROUP BY DepartmentID")
-            departments = cursor.fetchall()
-            if departments:
-                return True, departments
+            if name:
+                cursor.execute("INSERT INTO Departments (DepartmentName) VALUES (%s)", (name,))
+                conn.commit()
+                return True, "✅ Department added successfully."
             else:
-                return False, "No departments found."
+                return False, "❌ Department name cannot be empty."
     except MySQLError as e:
-        return False, f"Failed to retrieve departments: {e}"
+        conn.rollback()
+        return False, f"❌ Failed to add department: {e}"
+
+def view_departments(conn):
+    """Fetch departments with doctor count"""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT d.DepartmentID, d.DepartmentName, 
+                    COUNT(doc.DoctorID) AS DoctorCount
+                FROM Departments d
+                LEFT JOIN Doctors doc ON d.DepartmentID = doc.DepartmentID
+                GROUP BY d.DepartmentID
+                ORDER BY d.DepartmentID
+            """)
+            return True, cursor.fetchall()
+    except MySQLError as e:
+        return False, f"❌ Failed to retrieve departments: {e}"
+
 # Appointment Management
 def schedule_appointment(conn, patient_id, doctor_id, appointment_date, appointment_time, status="Scheduled"):
     """
@@ -1186,31 +1190,31 @@ def schedule_appointment(conn, patient_id, doctor_id, appointment_date, appointm
 
 def search_appointments(conn, role, username=None, year=None, month=None, day=None, status=None):
     """
-    Search appointments with optional filters:
-    - Admin/Receptionist/Accountant: All appointments.
-    - Doctor: Only appointments of the logged-in doctor.
+    Search appointments with optional filters.
+    Admin/Receptionist/Accountant: All appointments.
+    Doctor: Only appointments of the logged-in doctor.
     """
     try:
-        with conn.cursor() as cursor:
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
             query = """
                 SELECT a.AppointmentID, a.DoctorID, d.DoctorName,
                        a.PatientID, p.PatientName,
                        a.AppointmentDate, a.AppointmentTime, a.Status
                 FROM Appointments a
-                JOIN Doctors d ON a.DoctorID = d.DoctorID
-                JOIN Patients p ON a.PatientID = p.PatientID
+                LEFT JOIN Doctors d ON a.DoctorID = d.DoctorID
+                LEFT JOIN Patients p ON a.PatientID = p.PatientID
                 WHERE 1=1
             """
             params = []
 
-            # Filter for doctor role
+            # Doctor role: filter by logged-in doctor's ID
             if role.lower() == 'doctor':
                 cursor.execute("SELECT DoctorID FROM Doctors WHERE DoctorUser = %s", (username,))
                 doctor = cursor.fetchone()
                 if not doctor:
                     return False, "❌ Doctor profile not found for the given username."
                 query += " AND a.DoctorID = %s"
-                params.append(doctor['DoctorID'])
+                params.append(doctor["DoctorID"])
 
             # Date filters
             if year:
@@ -1225,14 +1229,16 @@ def search_appointments(conn, role, username=None, year=None, month=None, day=No
 
             # Status filter
             if status:
+                valid_statuses = {"Scheduled", "Completed", "Cancelled"}
+                if status not in valid_statuses:
+                    return False, "❌ Invalid status selected."
                 query += " AND a.Status = %s"
                 params.append(status)
 
             query += " ORDER BY a.AppointmentDate DESC, a.AppointmentTime DESC"
 
-            cursor.execute(query, tuple(params))
-            results = cursor.fetchall()
-            return True, results
+            cursor.execute(query, params)
+            return True, cursor.fetchall()
 
     except Exception as e:
         return False, f"❌ Error fetching appointments: {e}"
@@ -1979,7 +1985,7 @@ def add_medicine(conn, name, unit, quantity, cost):
 
         with conn.cursor() as cursor:
             query = """
-                INSERT INTO Medicines (MedicineName, Unit, Quantity, Cost)
+                INSERT INTO Medicine (MedicineName, Unit, Quantity, MedicineCost)
                 VALUES (%s, %s, %s, %s)
             """
             cursor.execute(query, (name, unit, quantity, cost))
@@ -2047,9 +2053,33 @@ def delete_medicine(conn, medicine_id):
         return False, f"❌ Failed to delete medicine: {e}"
     
 # MedicineBatch Management
-def add_medicine_batch(conn, medicine_id, batch_number, quantity, import_date, expiry_date, supplier_name, medicine_cost):
-    """Call stored procedure to add a new medicine batch"""
+def add_medicine_batch(conn, medicine_id, batch_number, quantity,
+                       import_date, expiry_date, supplier_name, medicine_cost):
+    """
+    Call stored procedure to add a new medicine batch.
+    Validates quantity and cost before calling the stored procedure.
+    """
     try:
+        # ✅ Validate quantity
+        try:
+            quantity = int(quantity)
+            if quantity < 0:
+                return False, "❌ Quantity cannot be negative."
+        except (ValueError, TypeError):
+            return False, "❌ Quantity must be a valid integer."
+
+        # ✅ Validate medicine cost
+        try:
+            medicine_cost = float(medicine_cost)
+            if medicine_cost < 0:
+                return False, "❌ Cost cannot be negative."
+        except (ValueError, TypeError):
+            return False, "❌ Cost must be a valid number."
+
+        # ✅ Validate dates (optional but good practice)
+        if not import_date or not expiry_date:
+            return False, "❌ Import date and expiry date are required."
+
         with conn.cursor() as cursor:
             cursor.callproc("sp_AddMedicineBatch", (
                 medicine_id,
@@ -2062,43 +2092,61 @@ def add_medicine_batch(conn, medicine_id, batch_number, quantity, import_date, e
             ))
             conn.commit()
             return True, "✅ Medicine batch added successfully."
+
     except MySQLError as e:
         conn.rollback()
-        return False, f"❌ Failed to add medicine batch: {e}"
+        return False, f"❌ Failed to add medicine batch: {str(e)}"
 
 def update_medicine_batch(conn, batch_id, medicine_id=None, batch_number=None,
                           expiry_date=None, quantity=None, cost=None):
-    """Update medicine batch fields selectively."""
+    """
+    Update selected fields of a medicine batch.
+    Only non-None values will be updated.
+    """
     try:
-        with conn.cursor() as cursor:
-            if not batch_id:
-                return False, "❌ Batch ID is required."
+        if not batch_id:
+            return False, "❌ Batch ID is required."
 
-            cursor.execute("SELECT BatchID FROM MedicineBatch WHERE BatchID = %s", (batch_id,))
+        with conn.cursor() as cursor:
+            # Kiểm tra batch có tồn tại không
+            cursor.execute("SELECT 1 FROM MedicineBatch WHERE BatchID = %s", (batch_id,))
             if not cursor.fetchone():
                 return False, "❌ Medicine batch not found."
 
+            # Danh sách trường cần cập nhật
             fields = []
             values = []
 
-            if medicine_id:
+            if medicine_id is not None:
                 fields.append("MedicineID = %s")
                 values.append(medicine_id)
-            if batch_number:
+            if batch_number is not None:
                 fields.append("BatchNumber = %s")
                 values.append(batch_number)
-            if expiry_date:
+            if expiry_date is not None:
                 fields.append("ExpiryDate = %s")
                 values.append(expiry_date)
             if quantity is not None:
-                fields.append("Quantity = %s")
-                values.append(quantity)
+                try:
+                    quantity = int(quantity)
+                    if quantity < 0:
+                        return False, "❌ Quantity must be non-negative."
+                    fields.append("Quantity = %s")
+                    values.append(quantity)
+                except ValueError:
+                    return False, "❌ Quantity must be an integer."
             if cost is not None:
-                fields.append("MedicineCost = %s")
-                values.append(cost)
+                try:
+                    cost = float(cost)
+                    if cost < 0:
+                        return False, "❌ Cost must be non-negative."
+                    fields.append("MedicineCost = %s")
+                    values.append(cost)
+                except ValueError:
+                    return False, "❌ Cost must be a number."
 
             if not fields:
-                return False, "❌ No fields to update."
+                return False, "❌ No valid fields provided for update."
 
             update_query = f"""
                 UPDATE MedicineBatch
@@ -3988,40 +4036,101 @@ def admin_menu(conn, username):
         choice = input("Choose an option: ")
 
         if choice == '1':
-            register_user(conn)
+            username = input("Enter Username: ")
+            password = input("Enter Password: ")
+            confirm_password = input("Enter Confirm Password: ")
+            role = input("Enter role: ")
+            success, message = register_user(conn, username, password, confirm_password, role)
+            print(message)
         elif choice == '2':
-            delete_user(conn)
+            username = input("Enter Username: ")
+            success, message = delete_user(conn, username)
+            print(message)
         elif choice == '3':
-            add_doctor(conn)
+            name = input("Enter Doctor Name: ")
+            dept_id = input("Enter Department ID: ")
+            specialization = input("Enter Specialization: ")
+            username = input("Enter Username: ")
+            success, message = add_doctor(conn, name, dept_id, specialization, username)
+            print(message)
         elif choice == '4':
-            delete_doctor(conn)
+            doctor_id = input("Enter Doctor ID: ")
+            success, message = delete_doctor(conn, doctor_id)
+            print(message)
         elif choice == '5':
-            add_patient(conn)
+            name = input("Enter Patient Name: ")
+            dob = input("Enter Date of Birth (YYYY-MM-DD): ")
+            gender = input("Enter Gender (M/F/O): ")
+            address = input("Enter Address: ")
+            phone = input("Enter Phone Number: ")
+            success, message = add_patient(conn, name, dob, gender, address, phone)
+            print(message)
         elif choice == '6':
-            delete_patient(conn)
+            patient_id = input("Enter Patient ID: ")
+            success, message = delete_patient(conn, patient_id)
+            print(message)
         elif choice == '7':
-            view_patients(conn)
+            success, patients = view_patients(conn)
+            if success:
+                print("\n--- Patient List ---")
+                for p in patients:
+                    print(f"ID: {p['PatientID']}, Name: {p['PatientName']}, DOB: {p['DateOfBirth']}, Gender: {p['Gender']}, Address: {p['Address']}, Phone: {p['PhoneNumber']}")
+            else:
+                print(patients)
         elif choice == '8':
-            schedule_appointment(conn)
+            patient_id = input("Enter Patient ID: ")
+            doctor_id = input("Enter Doctor ID: ")
+            appointment_date = input("Enter Appointment Date (YYYY-MM-DD): ")
+            appointment_time = input("Enter Appointment Time (HH:MM): ")
+            success, message = schedule_appointment(conn, patient_id, doctor_id, appointment_date, appointment_time)
+            print(message)
         elif choice == '9':
-            view_appointments(conn)
+            success, result = view_appointments(conn)
+            if success:
+                print(f"\n--- {result['title']} ---")
+                for appt in result['data']:
+                    print(appt)
+            else:
+                print(result)
         elif choice == '10':
-            create_invoice(conn)
+            patient_id = input("Enter Patient ID: ")
+            total_amount = input("Enter Total Amount: ")
+            success, message = create_invoice(conn, patient_id, total_amount)
+            print(message)
         elif choice == '11':
-            view_invoices(conn)
+            success, invoices = view_invoices(conn)
+            if success:
+                print("\n--- Invoice List ---")
+                for inv in invoices:
+                    print(inv)
+            else:
+                print(invoices)
         elif choice == '12':
-            view_departments(conn)
+            success, departments = view_departments(conn)
+            if success:
+                print("\n--- Department List ---")
+                for d in departments:
+                    print(d)
+            else:
+                print(departments)
         elif choice == '13':
-            generate_financial_report(conn)
+            success, report = generate_financial_report(conn)
+            if success:
+                print("\n--- Financial Report ---")
+                for k, v in report.items():
+                    print(f"{k}: {v}")
+            else:
+                print(report)
         elif choice == '14':
-            change_password(conn, username)
+            old_pw = getpass.getpass("Enter current password: ")
+            new_pw = getpass.getpass("Enter new password: ")
+            success, message = change_password(conn, username, old_pw, new_pw)
+            print(message)
         elif choice == '15':
             print("Logging out...")
             return
         else:
             print("❌ Invalid option")
-
-def doctor_menu(conn, doctor_id, username):
     """Doctor menu with restricted access"""
     while True:
         print("\n--- DOCTOR MENU ---")

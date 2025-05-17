@@ -2680,7 +2680,6 @@ def open_inventory_manager_menu(conn, username):
         "Dashboard": ("📊", lambda: load_recent_adjustments()),
         "View Inventory": ("📋", lambda: view_inventory_gui(conn)),
         "Add Inventory Item": ("➕", lambda: add_inventory_gui(conn)),
-        "Update Inventory Item": ("✏️", lambda: update_inventory_gui(conn)),
         "Disable Inventory Item": ("❌", lambda: disable_inventory_item_gui(conn)),
         "Adjust Inventory": ("🔄", lambda: adjust_inventory_gui(conn)),
         "View Medicines": ("💊", lambda: view_medicine_gui(conn)),
@@ -3337,12 +3336,6 @@ def add_patient_gui(conn):
             window.focus_force()
             return
         
-        if len(phone) < 10:
-            messagebox.showerror("Error", "❌ Phone Number must be at least 10 digits.")
-            window.lift()
-            window.focus_force()
-            return
-
         success, message = add_patient(conn, name, dob, gender, address, phone)
         if success:
             messagebox.showinfo("Success", message)
@@ -3586,49 +3579,90 @@ def disable_patient_account_gui(conn):
     submit_btn.pack(pady=10)
 
 #Department GUI Functions
+def view_departments_gui(conn):
+    """GUI for viewing departments with refresh support"""
+    view_window = tk.Toplevel()
+    view_window.title("View Departments")
+    view_window.geometry("600x400")
+    view_window.config(bg=BG_COLOR)
+    center_window(view_window)
+
+    # Main frame
+    main_frame = tk.Frame(view_window, bg=BG_COLOR)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+
+    # Scrollable Text Area
+    text_area = create_scrollable_text(main_frame, height=15, width=70)
+
+    def fetch():
+        success, result = view_departments(conn)
+        text_area.delete(1.0, tk.END)
+        if success:
+            if result:
+                for dept in result:
+                    text_area.insert(tk.END, f"Department ID: {dept['DepartmentID']}\n")
+                    text_area.insert(tk.END, f"Name: {dept['DepartmentName']}\n")
+                    text_area.insert(tk.END, f"Doctor Count: {dept['DoctorCount']}\n")
+                    text_area.insert(tk.END, "-" * 40 + "\n")
+            else:
+                text_area.insert(tk.END, "No departments found.\n")
+        else:
+            messagebox.showerror("Error", result)
+
+    # Refresh Button
+    refresh_button = tk.Button(main_frame, text="Refresh", command=fetch)
+    apply_styles(refresh_button)
+    refresh_button.pack(pady=10)
+
+    # Call fetch initially
+    fetch()
+
 def add_department_gui(conn):
-    """GUI for adding a department"""
+    """GUI for adding a department and auto-refreshing the view"""
+    def on_success():
+        view_departments_gui(conn)
+
+    _add_department_gui(conn, refresh_callback=on_success)
+
+def _add_department_gui(conn, refresh_callback=None):
+    """Internal GUI logic with refresh callback support"""
     add_window = tk.Toplevel()
     add_window.title("Add Department")
     add_window.geometry("400x200")
     add_window.config(bg=BG_COLOR)
     center_window(add_window)
     add_window.lift()
-    add_window.attributes('-topmost', True)  # Đưa cửa sổ lên trên cùng
+    add_window.attributes('-topmost', True)
     add_window.after(100, lambda: add_window.attributes('-topmost', False))
-    # Main frame
+
     main_frame = tk.Frame(add_window, bg=BG_COLOR)
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
-    # Form frame
-    form_frame = tk.Frame(main_frame, bg=BG_COLOR)
-    form_frame.pack(fill=tk.X)
-
-    # Department Name
-    tk.Label(form_frame, text="Department Name:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
-    entry_name = tk.Entry(form_frame)
+    tk.Label(main_frame, text="Department Name:", bg=BG_COLOR).grid(row=0, column=0, sticky="e", pady=5)
+    entry_name = tk.Entry(main_frame)
     entry_name.grid(row=0, column=1, pady=5, padx=5, sticky="ew")
     apply_styles(entry_name)
 
     def submit():
-        name = entry_name.get()
+        name = entry_name.get().strip()
+        if not name:
+            messagebox.showerror("Error", "❌ Department name is required.")
+            return
+
         success, message = add_department(conn, name)
         if success:
             messagebox.showinfo("Success", message)
+            if refresh_callback:
+                refresh_callback()
             add_window.destroy()
         else:
             messagebox.showerror("Error", message)
             add_window.lift()
             add_window.focus_force()
 
-    # Submit button
-    submit_btn = tk.Button(
-        main_frame,
-        text="Add Department",
-        command=submit
-    )
+    submit_btn = tk.Button(main_frame, text="Add Department", command=submit)
     apply_styles(submit_btn)
-    submit_btn.pack(pady=10)
+    submit_btn.grid(row=1, columnspan=2, pady=10)
 
 def update_department_gui(conn):
     """GUI for updating a department"""
@@ -3680,50 +3714,6 @@ def update_department_gui(conn):
     )
     apply_styles(submit_btn)
     submit_btn.pack(pady=10)
-
-def view_departments_gui(conn):
-    """GUI for viewing departments"""
-    view_window = tk.Toplevel()
-    view_window.title("View Departments")
-    view_window.geometry("600x400")
-    view_window.config(bg=BG_COLOR)
-    center_window(view_window)
-    
-    # Main frame
-    main_frame = tk.Frame(view_window, bg=BG_COLOR)
-    main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-    
-    # Results area
-    text_area = create_scrollable_text(main_frame, height=15, width=70)
-    
-    def fetch():
-        success, result = view_departments(conn)
-        
-        text_area.delete(1.0, tk.END)
-        
-        if success:
-            if result:
-                for dept in result:
-                    text_area.insert(tk.END, f"Department ID: {dept['DepartmentID']}\n")
-                    text_area.insert(tk.END, f"Name: {dept['DepartmentName']}\n")
-                    text_area.insert(tk.END, f"Doctor Count: {dept['DoctorCount']}\n")
-                    text_area.insert(tk.END, "-"*40 + "\n")
-            else:
-                text_area.insert(tk.END, "No departments found\n")
-        else:
-            messagebox.showerror("Error", result)
-
-    # Fetch button (though we'll call it immediately)
-    fetch_btn = tk.Button(
-        main_frame,
-        text="Refresh",
-        command=fetch
-    )
-    apply_styles(fetch_btn)
-    fetch_btn.pack(pady=10)
-    
-    # Fetch data immediately when window opens
-    fetch()
 
 # Appointment GUI Functions
 def schedule_appointment_gui(conn):
@@ -3928,178 +3918,154 @@ def refresh_appointments(conn, doctor_id, tree_widget):
             tree_widget.insert("", tk.END, values=("Error", "Check logs", "Error"))
         except tk.TclError: pass
 
-def view_appointments_gui(conn, role, user_id=None):
-    """GUI for viewing appointments with consistent styling to doctor dashboard"""
+def view_appointments_gui(conn, role, username=None):
     view_window = tk.Toplevel()
     view_window.title("Appointment Management")
     view_window.geometry("1100x700")
-    view_window.config(bg="#f5f7fa")  # Matching light background
+    light_color = "#f5f7fa"
+    view_window.config(bg=light_color)
     center_window(view_window)
-    
-    # Modern color scheme matching doctor dashboard
+
     primary_color = "#4a6fa5"
     accent_color = "#5d9cec"
     dark_color = "#333333"
-    light_color = "#f5f7fa"
     card_bg = "white"
     card_border = "#e0e0e0"
-    
-    # Font settings matching doctor dashboard
+
+    # Fonts
     try:
         title_font = ("Segoe UI", 16, "bold")
-        header_font = ("Segoe UI", 12, "bold")
-        normal_font = ("Segoe UI", 11)
         small_font = ("Segoe UI", 10)
-    except tk.TclError:
+        normal_font = ("Segoe UI", 11)
+    except:
         title_font = ("Arial", 16, "bold")
-        header_font = ("Arial", 12, "bold")
-        normal_font = ("Arial", 11)
         small_font = ("Arial", 10)
+        normal_font = ("Arial", 11)
 
-    # Main container frame
+    # Helpers for formatting
+    def format_date(val):
+        try:
+            return val.strftime('%Y-%m-%d')
+        except:
+            try:
+                return datetime.strptime(str(val), '%Y-%m-%d').strftime('%Y-%m-%d')
+            except:
+                return str(val)
+
+    def format_time(val):
+        try:
+            return val.strftime('%H:%M')
+        except:
+            return str(val)
+
+    # Main frame
     main_frame = tk.Frame(view_window, bg=light_color, padx=20, pady=20)
     main_frame.pack(fill="both", expand=True)
 
     # Header
-    header_frame = tk.Frame(main_frame, bg=light_color)
-    header_frame.pack(fill="x", pady=(0, 20))
-    
-    tk.Label(header_frame, text="Appointment Management", 
-            font=title_font, bg=light_color, fg=dark_color).pack(side="left")
-    
-    # Filter controls in a card
-    filter_card = tk.Frame(main_frame, bg=card_bg, bd=0, relief="flat",
-                         highlightbackground=card_border, highlightthickness=1,
-                         padx=15, pady=15)
-    filter_card.pack(fill="x", pady=(0, 15))
+    tk.Label(main_frame, text="Appointment Management", font=title_font, 
+             bg=light_color, fg=dark_color).pack(anchor="w", pady=(0, 10))
 
-    # Date filters
-    tk.Label(filter_card, text="Filter by Date:", font=small_font, 
-            bg=card_bg, fg="#7f8c8d").grid(row=0, column=0, padx=5, sticky="w")
-    
-    tk.Label(filter_card, text="Year:", bg=card_bg).grid(row=1, column=0, padx=5)
-    entry_year = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
-    entry_year.grid(row=1, column=1, padx=5)
-    
-    tk.Label(filter_card, text="Month:", bg=card_bg).grid(row=1, column=2, padx=5)
-    entry_month = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
-    entry_month.grid(row=1, column=3, padx=5)
-    
-    tk.Label(filter_card, text="Day:", bg=card_bg).grid(row=1, column=4, padx=5)
-    entry_day = tk.Entry(filter_card, width=8, font=normal_font, bd=1, relief="solid")
-    entry_day.grid(row=1, column=5, padx=5)
-    
-    tk.Label(filter_card, text="Status:", bg=card_bg).grid(row=1, column=6, padx=5)
+    # Filters
+    filter_frame = tk.Frame(main_frame, bg=card_bg, padx=15, pady=15,
+                            highlightbackground=card_border, highlightthickness=1)
+    filter_frame.pack(fill="x", pady=(0, 15))
+
+    # Year
+    tk.Label(filter_frame, text="Year:", bg=card_bg).grid(row=0, column=0, padx=5, sticky="e")
+    entry_year = tk.Entry(filter_frame, width=8, font=normal_font)
+    entry_year.grid(row=0, column=1, padx=5)
+
+    # Month
+    tk.Label(filter_frame, text="Month:", bg=card_bg).grid(row=0, column=2, padx=5, sticky="e")
+    entry_month = tk.Entry(filter_frame, width=8, font=normal_font)
+    entry_month.grid(row=0, column=3, padx=5)
+
+    # Day
+    tk.Label(filter_frame, text="Day:", bg=card_bg).grid(row=0, column=4, padx=5, sticky="e")
+    entry_day = tk.Entry(filter_frame, width=8, font=normal_font)
+    entry_day.grid(row=0, column=5, padx=5)
+
+    # Status
+    tk.Label(filter_frame, text="Status:", bg=card_bg).grid(row=0, column=6, padx=5, sticky="e")
     status_var = tk.StringVar(value="All")
-    status_options = ["All", "Scheduled", "Completed", "Cancelled"]
-    status_menu = tk.OptionMenu(filter_card, status_var, *status_options)
-    status_menu.config(font=small_font, width=12, bd=1, relief="solid")
-    status_menu.grid(row=1, column=7, padx=5)
-    
-    # Search button with matching style
-    search_btn = tk.Button(filter_card, text="Search", 
-                         bg=accent_color, fg="white", font=small_font,
-                         bd=0, relief="flat", padx=15, pady=5)
-    search_btn.grid(row=1, column=8, padx=10)
-    
-    error_label = tk.Label(view_window, text="", fg="red", bg=BG_COLOR, font=("Arial", 10))
+    status_menu = tk.OptionMenu(filter_frame, status_var, "All", "Scheduled", "Completed", "Cancelled")
+    status_menu.config(font=small_font)
+    status_menu.grid(row=0, column=7, padx=5)
+
+    # Buttons
+    search_btn = tk.Button(filter_frame, text="Search", bg=accent_color, fg="white",
+                           font=small_font, padx=10, pady=5, command=lambda: fetch_appointments())
+    search_btn.grid(row=0, column=8, padx=10)
+
+    clear_btn = tk.Button(filter_frame, text="Clear", bg=primary_color, fg="white",
+                          font=small_font, padx=10, pady=5, command=lambda: clear_filters())
+    clear_btn.grid(row=0, column=9, padx=10)
+
+    error_label = tk.Label(main_frame, text="", fg="red", bg=light_color, font=small_font)
     error_label.pack()
 
-    # Treeview in a card
-    tree_card = tk.Frame(main_frame, bg=card_bg, bd=0, relief="flat",
-                        highlightbackground=card_border, highlightthickness=1,
-                        padx=15, pady=15)
-    tree_card.pack(fill="both", expand=True)
-    
-    # Configure treeview style to match the theme
-    style = ttk.Style()
-    style.configure("Treeview.Heading", font=small_font, background=light_color, 
-                   foreground=dark_color, relief="flat")
-    style.configure("Treeview", font=small_font, rowheight=28, 
-                   fieldbackground=card_bg, background=card_bg)
-    style.map("Treeview", background=[('selected', primary_color)], 
-             foreground=[('selected', 'white')])
-    
-    # Treeview columns
+    # Treeview
+    tree_frame = tk.Frame(main_frame, bg=card_bg,
+                          highlightbackground=card_border, highlightthickness=1)
+    tree_frame.pack(fill="both", expand=True)
+
     columns = ("ID", "Date", "Time", "Status", "Doctor", "Patient")
-    tree = ttk.Treeview(tree_card, columns=columns, show='headings', height=15)
-    
-    # Column configurations
-    tree.column("ID", width=80, anchor=tk.W)
-    tree.column("Date", width=100, anchor=tk.W)
-    tree.column("Time", width=80, anchor=tk.W)
-    tree.column("Status", width=100, anchor=tk.W)
-    tree.column("Doctor", width=200, anchor=tk.W)
-    tree.column("Patient", width=200, anchor=tk.W)
-    
-    # Headings
+    tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
     for col in columns:
         tree.heading(col, text=col)
-    
-    # Scrollbar
-    scrollbar = ttk.Scrollbar(tree_card, orient="vertical", command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    
-    # Grid layout
+        tree.column(col, anchor="w", width=150)
     tree.grid(row=0, column=0, sticky="nsew")
+
+    scrollbar = ttk.Scrollbar(tree_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
     scrollbar.grid(row=0, column=1, sticky="ns")
-    tree_card.grid_rowconfigure(0, weight=1)
-    tree_card.grid_columnconfigure(0, weight=1)
-    
-    # Tag configurations for different statuses
+    tree_frame.grid_rowconfigure(0, weight=1)
+    tree_frame.grid_columnconfigure(0, weight=1)
+
     tree.tag_configure('Scheduled', background='#e3f2fd')
     tree.tag_configure('Completed', background='#e8f5e9')
     tree.tag_configure('Cancelled', background='#ffebee')
 
     def fetch_appointments():
         try:
-            year = entry_year.get().strip()
-            month = entry_month.get().strip()
-            day = entry_day.get().strip()
-            status = status_var.get() if status_var.get() != "All" else None
+            error_label.config(text="")
 
-            year = int(year) if year else None
-            month = int(month) if month else None
-            day = int(day) if day else None
+            year = int(entry_year.get()) if entry_year.get().isdigit() else None
+            month = int(entry_month.get()) if entry_month.get().isdigit() else None
+            day = int(entry_day.get()) if entry_day.get().isdigit() else None
+            status = status_var.get()
+            status = status if status != "All" else None
 
-            success, result = search_appointments(conn, role, user_id, year, month, day, status)
-
+            success, results = search_appointments(conn, role, username, year, month, day, status)
             tree.delete(*tree.get_children())
 
             if not success:
-                error_label.config ("Error", result)
+                error_label.config(text=results)
                 return
-            if not result:
-                error_label.config(text="No appointments found matching the criteria.")
+            if not results:
+                error_label.config(text="No appointments found.")
                 return
 
-            for appt in result:
+            for appt in results:
                 tree.insert("", tk.END, values=(
                     appt["AppointmentID"],
-                    appt["AppointmentDate"].strftime('%Y-%m-%d') if appt["AppointmentDate"] else "",
-                    f"{int(appt['AppointmentTime'].seconds // 3600):02d}:{int((appt['AppointmentTime'].seconds % 3600) // 60):02d}"
-                    if appt["AppointmentTime"] else "",
+                    format_date(appt["AppointmentDate"]),
+                    format_time(appt["AppointmentTime"]),
                     appt["Status"],
                     appt["DoctorName"],
                     appt["PatientName"]
                 ), tags=(appt["Status"],))
-
-
-        except ValueError:
-            error_label.config(text="Please enter valid numbers for year/month/day")
-            view_window.lift()
-            view_window.focus_force()
-            return
         except Exception as e:
-            error_label.config(text=f"An unexpected error occurred: {str(e)}")
-            view_window.lift()
+            error_label.config(text=f"❌ Error loading data: {e}")
 
-    search_btn.config(command=fetch_appointments)
-    
-    # Add some padding at the bottom
-    tk.Frame(main_frame, bg=light_color, height=20).pack()
-    
-    # Initial data load
+    def clear_filters():
+        entry_year.delete(0, tk.END)
+        entry_month.delete(0, tk.END)
+        entry_day.delete(0, tk.END)
+        status_var.set("All")
+        fetch_appointments()
+
     view_window.after(100, fetch_appointments)
 
 def update_appointment_status_gui(conn):
@@ -7731,7 +7697,7 @@ def add_medicine_batch_gui(conn):
 
     labels = [
         "Medicine ID:", "Batch Number:", "Expiry Date (YYYY-MM-DD):",
-        "Quantity:", "Cost (VND):"
+        "Quantity:", "Supplier Name:", "Cost (VND):"
     ]
     entries = []
 
@@ -7748,20 +7714,39 @@ def add_medicine_batch_gui(conn):
             batch_number = entries[1].get().strip()
             expiry_date = entries[2].get().strip()
             quantity = entries[3].get().strip()
-            cost = entries[4].get().strip()
+            supplier_name = entries[4].get().strip()
+            cost = entries[5].get().strip()
+            import_date = datetime.now().strftime("%Y-%m-%d")
 
-            if not all([medicine_id, batch_number, expiry_date]):
-                raise ValueError("❌ All fields except cost/quantity must be filled.")
-            
-            if quantity < 0 or cost < 0:
-                raise ValueError("❌ Quantity and cost must be non-negative.")
+            if not all([medicine_id, batch_number, expiry_date, quantity, cost]):
+                raise ValueError("❌ All fields must be filled.")
+
+            quantity = int(quantity)
+            if quantity < 0:
+                raise ValueError("❌ Quantity must be non-negative.")
+
+            cost = float(cost)
+            if cost < 0:
+                raise ValueError("❌ Cost must be non-negative.")
+
         except ValueError as ve:
             messagebox.showerror("Error", str(ve))
             batch_window.lift()
             batch_window.focus_force()
             return
 
-        result = add_medicine_batch(conn, medicine_id, batch_number, expiry_date, quantity, cost)
+        # ✅ Gọi hàm đúng thứ tự đối số
+        result = add_medicine_batch(
+            conn,
+            medicine_id,
+            batch_number,
+            quantity,
+            import_date,
+            expiry_date,
+            supplier_name,
+            cost
+        )
+
         if result is None:
             messagebox.showerror("Error", "❌ Failed to add batch (internal error).")
         else:
@@ -7782,7 +7767,7 @@ def update_medicine_batch_gui(conn):
     """GUI for updating medicine batch"""
     prompt_window = tk.Toplevel()
     prompt_window.title("Update Medicine Batch")
-    prompt_window.geometry("350x320")
+    prompt_window.geometry("350x330")
     prompt_window.config(bg=BG_COLOR)
     center_window(prompt_window)
     prompt_window.lift()
@@ -7794,38 +7779,49 @@ def update_medicine_batch_gui(conn):
     main_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
 
     # Entry fields
-    fields = {
-        "Batch ID": tk.Entry(main_frame),
-        "Medicine ID": tk.Entry(main_frame),
-        "Batch Number": tk.Entry(main_frame),
-        "Expiry Date (YYYY-MM-DD)": tk.Entry(main_frame),
-        "Quantity": tk.Entry(main_frame),
-        "Medicine Cost (VND)": tk.Entry(main_frame),
-    }
+    labels = [
+        "Batch ID", "Medicine ID", "Batch Number",
+        "Expiry Date (YYYY-MM-DD)", "Quantity", "Medicine Cost (VND)"
+    ]
+    entries = {}
 
-    for i, (label, entry) in enumerate(fields.items()):
+    for i, label in enumerate(labels):
         tk.Label(main_frame, text=label + ":", bg=BG_COLOR).grid(row=i, column=0, sticky="e", pady=5)
+        entry = tk.Entry(main_frame)
         entry.grid(row=i, column=1, pady=5, padx=5, sticky="ew")
         apply_styles(entry)
+        entries[label] = entry
 
-    # Button
     def submit():
-        values = {label: entry.get().strip() for label, entry in fields.items()}
+        values = {label: entries[label].get().strip() for label in labels}
         batch_id = values["Batch ID"]
+
         if not batch_id:
-            messagebox.showerror("Error", "Batch ID is required.")
+            messagebox.showerror("Error", "❌ Batch ID is required.")
             prompt_window.lift()
             prompt_window.focus_force()
             return
 
+        # Giữ nguyên các trường trống là None
+        medicine_id = values["Medicine ID"] or None
+        batch_number = values["Batch Number"] or None
+        expiry_date = values["Expiry Date (YYYY-MM-DD)"] or None
+
+        quantity = values["Quantity"]
+        cost = values["Medicine Cost (VND)"]
+
+        # Chuyển đổi kiểu nếu có nhập
+        quantity = quantity if quantity != "" else None
+        cost = cost if cost != "" else None
+
         success, message = update_medicine_batch(
             conn,
             batch_id,
-            values["Medicine ID"],
-            values["Batch Number"],
-            values["Expiry Date (YYYY-MM-DD)"],
-            values["Quantity"],
-            values["Medicine Cost (VND)"]
+            medicine_id,
+            batch_number,
+            expiry_date,
+            quantity,
+            cost
         )
 
         if success:
@@ -7837,7 +7833,7 @@ def update_medicine_batch_gui(conn):
             prompt_window.focus_force()
 
     submit_button = tk.Button(main_frame, text="Update Batch", command=submit)
-    submit_button.grid(row=len(fields), columnspan=2, pady=(10, 0))
+    submit_button.grid(row=len(labels), columnspan=2, pady=(10, 0))
     apply_styles(submit_button)
 
 def delete_medicine_batch_gui(conn):
