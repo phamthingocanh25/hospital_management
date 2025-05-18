@@ -2360,7 +2360,7 @@ def adjust_medicine_quantity(conn, batch_id, used_quantity):
             # Cập nhật số lượng lô thuốc
             cursor.execute("""
                 UPDATE MedicineBatch 
-                SET Quantity = Quantity - %s 
+                SET Quantity = Quantity + %s 
                 WHERE BatchID = %s
             """, (used_quantity, batch_id))
 
