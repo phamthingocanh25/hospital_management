@@ -1,2 +1,0 @@
-ALTER TABLE doctors ADD DoctorUser VARCHAR(50) UNIQUE;
-ALTER TABLE invoices DROP COLUMN Status;
