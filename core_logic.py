@@ -19,7 +19,7 @@ load_dotenv()
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
     'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', 'MaiAnh<3'),
+    'password': os.getenv('DB_PASSWORD', 'anh@2502'),
     'database': os.getenv('DB_NAME', 'hospitalmanagementsystem'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
@@ -132,6 +132,20 @@ def search_system_users(conn, username=None, role=None):
         print(f"Unexpected Error in search_system_users: {e}")
         # conn.rollback() # If part of a transaction
         return False, f"An unexpected error occurred: {e}"
+
+def get_departments_list(conn):
+    """Fetches a list of departments (ID and Name) for dropdowns."""
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT DepartmentID, DepartmentName FROM Departments ORDER BY DepartmentName")
+            departments = cursor.fetchall() # Fetchall returns a list of dicts
+            return True, departments
+    except MySQLError as e:
+        print(f"DB Error fetching departments list: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        print(f"Unexpected error fetching departments list: {e}")
+        return False, f"Unexpected Error: {e}"
 
 def get_patient_prescriptions(conn, patient_id):
     """
@@ -267,6 +281,58 @@ def get_room_types_with_availability(conn):
          print(f"DB Error in get_room_types_with_availability: {e}")
          return False, f"Database error: {e}"
      # return False, "Not Implemented" # Return failure until implemented
+def get_admin_activity_overview_stats(conn):
+    """Fetches data for the admin dashboard's activity overview section."""
+    overview_data = {
+        "active_users": "E",
+        "disabled_users": "E",
+        "expiring_medicines_30d": "E",
+        "low_stock_inventory": "E",
+        "pending_admissions": "E"
+    }
+    if not conn:
+        print("Error: No database connection provided to get_admin_activity_overview_stats.")
+        return overview_data
+
+    try:
+        with conn.cursor() as cursor:
+            # User Status
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE IsActive = TRUE")
+            active_users_result = cursor.fetchone()
+            overview_data["active_users"] = str(active_users_result['count']) if active_users_result else "0"
+
+            cursor.execute("SELECT COUNT(*) as count FROM users WHERE IsActive = FALSE")
+            disabled_users_result = cursor.fetchone()
+            overview_data["disabled_users"] = str(disabled_users_result['count']) if disabled_users_result else "0"
+
+            # Expiring Medicine Batches (Active and expiring in next 30 days)
+            cursor.execute("""
+                SELECT COUNT(*) as count
+                FROM MedicineBatch
+                WHERE ExpiryDate BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+                  AND Status = 'Active'
+            """)
+            expiring_med_result = cursor.fetchone()
+            overview_data["expiring_medicines_30d"] = str(expiring_med_result['count']) if expiring_med_result else "0"
+
+            # Low Stock Inventory
+            cursor.execute("SELECT COUNT(*) as count FROM Inventory WHERE Status IN ('Low Stock', 'Out of Stock')")
+            low_stock_result = cursor.fetchone()
+            overview_data["low_stock_inventory"] = str(low_stock_result['count']) if low_stock_result else "0"
+
+            # Pending Admission Orders
+            cursor.execute("SELECT COUNT(*) as count FROM AdmissionOrders WHERE Status = 'Pending'")
+            pending_admissions_result = cursor.fetchone()
+            overview_data["pending_admissions"] = str(pending_admissions_result['count']) if pending_admissions_result else "0"
+
+    except MySQLError as e:
+        print(f"Database error fetching admin overview stats: {e}")
+        for key_item in overview_data: overview_data[key_item] = "E" # Reset on DB error
+    except Exception as e:
+        print(f"Unexpected error fetching admin overview stats: {e}")
+        for key_item in overview_data: overview_data[key_item] = "E" # Reset on general error
+    return overview_data
+
 def get_departments_list(conn):
     """Fetches a list of departments (ID and Name) for dropdowns."""
     try:
@@ -684,48 +750,85 @@ def delete_user(conn, username):
         return False, f"❌ Failed to delete user: {e}"
         
 # Doctor Management
-def add_doctor(conn, name, dept_id, specialization, username):
-    """Add new doctor with automatic account creation"""
+def add_doctor(conn, name, dept_id, specialization, username, phone_number=None, email=None):
+    """Add new doctor with automatic account creation, including phone and email."""
     print("\n--- Add New Doctor ---")
-
-    # Generate a random temporary password
-    temp_password = generate_temp_password()
+    temp_password = generate_temp_password() # Đảm bảo hàm này đã được định nghĩa
 
     try:
         with conn.cursor() as cursor:
+            # Kiểm tra các trường bắt buộc
             if not all([name, dept_id, specialization, username]):
-                return False, "All fields are required."
-            # Check if department exists
+                return False, "Doctor Name, Department, Specialty, and System Username are required."
+
+            # Kiểm tra DepartmentID có tồn tại không
             cursor.execute("SELECT DepartmentID FROM Departments WHERE DepartmentID = %s", (dept_id,))
             if not cursor.fetchone():
-                print("❌ Department does not exist")
-                return False, "❌ Department does not exist"
+                return False, f"❌ Department ID '{dept_id}' does not exist."
 
-            # Check if username already exists
+            # Kiểm tra xem DoctorUser (username) đã tồn tại trong bảng Doctors chưa
+            # Bảng Doctors đã có UNIQUE constraint cho DoctorUser, PhoneNumber, Email
+            cursor.execute("SELECT DoctorUser FROM Doctors WHERE DoctorUser = %s", (username,))
+            if cursor.fetchone():
+                return False, f"❌ System Username '{username}' is already assigned to another doctor."
+
+            # Kiểm tra xem username đã tồn tại trong bảng users chưa
             cursor.execute("SELECT username FROM users WHERE username = %s", (username,))
             if cursor.fetchone():
-                print("❌ Username already exists")
-                return False, "❌ Username already exists"
+                return False, f"❌ System Username '{username}' already exists in the users login table."
+            
+            # Kiểm tra PhoneNumber nếu được cung cấp và chưa có trong bảng Doctors
+            if phone_number:
+                cursor.execute("SELECT DoctorID FROM Doctors WHERE PhoneNumber = %s", (phone_number,))
+                if cursor.fetchone():
+                    return False, f"❌ Phone number '{phone_number}' already exists for another doctor."
+            
+            # Kiểm tra Email nếu được cung cấp và chưa có trong bảng Doctors
+            if email:
+                cursor.execute("SELECT DoctorID FROM Doctors WHERE Email = %s", (email,))
+                if cursor.fetchone():
+                    return False, f"❌ Email '{email}' already exists for another doctor."
 
-            # Add to Doctors table
-            cursor.execute(""" 
-                INSERT INTO Doctors (DoctorName, DepartmentID, Specialty, DoctorUser)
-                VALUES (%s, %s, %s, %s)
-            """, (name, dept_id, specialization, username))
 
-            # Create user account with hashed password
-            hashed_pw = hash_password(temp_password)
-            cursor.execute("""
-                INSERT INTO users (username, password, role)
-                VALUES (%s, %s, 'doctor')
-            """, (username, hashed_pw))
+            # Thêm thông tin vào bảng Doctors
+            sql_insert_doctor = """
+                INSERT INTO Doctors (DoctorName, DepartmentID, Specialty, DoctorUser, PhoneNumber, Email, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) 
+            """
+            # Thêm status='active' mặc định khi tạo bác sĩ mới
+            cursor.execute(sql_insert_doctor, (name, dept_id, specialization, username, phone_number, email, 'active'))
+
+            # Tạo tài khoản người dùng trong bảng users
+            hashed_pw = hash_password(temp_password) # Đảm bảo hàm này đã được định nghĩa
+            # Lưu FullName (tên bác sĩ) và Email (email bác sĩ) vào bảng users
+            sql_insert_user = """
+                INSERT INTO users (username, password, role, FullName, Email, IsActive)
+                VALUES (%s, %s, 'doctor', %s, %s, TRUE) 
+            """
+            cursor.execute(sql_insert_user, (username, hashed_pw, name, email))
 
             conn.commit()
-            return True, f"✅ Doctor added successfully. Temporary password: {temp_password} - Please change immediately!"
+            return True, f"✅ Doctor '{name}' added successfully with username '{username}'.\nTemporary Password: {temp_password}\nPlease ask the doctor to change it immediately!"
+
     except MySQLError as e:
-        print(f"❌ Failed to add doctor: {e}")
         conn.rollback()
-        return False, f"❌ Failed to add doctor: {e}"
+        # Phân tích lỗi cụ thể hơn nếu là lỗi UNIQUE constraint từ database
+        if e.args[0] == 1062: # Mã lỗi cho Duplicate entry
+            error_message = str(e).lower()
+            if 'doctoruser' in error_message:
+                 return False, f"❌ Failed to add doctor: System Username '{username}' already exists."
+            elif 'phonenumber' in error_message:
+                 return False, f"❌ Failed to add doctor: Phone number '{phone_number}' already exists."
+            elif 'email' in error_message and 'doctors' in error_message : # Email trong bảng Doctors
+                 return False, f"❌ Failed to add doctor: Email '{email}' already exists for another doctor."
+            elif 'username' in error_message and 'users' in error_message: # Username trong bảng Users
+                 return False, f"❌ Failed to create user account: Username '{username}' already exists."
+            elif 'email' in error_message and 'users' in error_message: # Email trong bảng Users
+                 return False, f"❌ Failed to create user account: Email '{email}' already exists for another user."
+        return False, f"❌ Failed to add doctor: Database error (Code: {e.args[0]}) - {e.args[1]}"
+    except Exception as e_gen:
+        conn.rollback()
+        return False, f"❌ Failed to add doctor: An unexpected error occurred - {str(e_gen)}"
 
 def delete_doctor(conn, doctor_id):
     """Delete a doctor from the system based on doctor_id"""
@@ -1456,18 +1559,38 @@ def search_room_types(conn, room_type_id=None, room_type_name=None):
     except Exception as e:
         return False, f"❌ Failed to retrieve room types: {e}"
     
-def add_room_type(conn, type_name=None, base_cost=None, des=None):
+def add_room_type(conn, type_name=None, base_cost=None, description=None): # Đổi tên 'des' thành 'description' cho rõ ràng
     """Add a new room type to the system"""
     try:
         with conn.cursor() as cursor:
-            if not type_name or not base_cost:
+            if not type_name or not base_cost: # TypeName và BaseCost là bắt buộc (NOT NULL)
                 return False, "❌ Type name and base cost cannot be empty."
-            cursor.execute("INSERT INTO RoomTypes (TypeName, BaseCost) VALUES (%s, %s,%s)", (type_name, base_cost,des))
+            
+            # Kiểm tra base_cost có phải là số hợp lệ không
+            try:
+                base_cost_decimal = float(base_cost)
+                if base_cost_decimal < 0:
+                    return False, "❌ Base cost must be a non-negative number."
+            except ValueError:
+                return False, "❌ Base cost must be a valid number."
+
+            # Câu lệnh INSERT giờ đây bao gồm cả 3 cột
+            # Cột Description có thể NULL, nên nếu description là None hoặc chuỗi rỗng, nó vẫn hợp lệ
+            sql_insert = "INSERT INTO RoomTypes (TypeName, BaseCost, Description) VALUES (%s, %s, %s)"
+            cursor.execute(sql_insert, (type_name, base_cost_decimal, description if description else None))
+            
             conn.commit()
             return True, "✅ Room type added successfully."
     except MySQLError as e:
         conn.rollback()
-        return False, f"❌ Failed to add room type: {e}"
+        # Kiểm tra lỗi cụ thể hơn, ví dụ lỗi UNIQUE constraint cho TypeName
+        if e.args[0] == 1062: # Mã lỗi cho Duplicate entry
+             if 'TypeName' in str(e): # Kiểm tra nếu lỗi liên quan đến TypeName
+                 return False, f"❌ Failed to add room type: TypeName '{type_name}' already exists."
+        return False, f"❌ Failed to add room type: {e} (Error Code: {e.args[0]})"
+    except Exception as ex: # Bắt các lỗi không mong muốn khác
+        conn.rollback()
+        return False, f"❌ An unexpected error occurred: {ex}"
     
 def update_room_type(conn, room_type_id, type_name, base_cost):
     """Update room type information"""
@@ -1892,7 +2015,7 @@ def add_emergency_contact(conn, patient_id, contact_name, relationship, phone_nu
 
             # Thêm liên hệ khẩn cấp
             cursor.execute("""
-                INSERT INTO EmergencyContacts (PatientID, ContactName, Relationship, PhoneNumber, Address)
+                INSERT INTO EmergencyContact (PatientID, ContactName, Relationship, PhoneNumber, Address)
                 VALUES (%s, %s, %s, %s, %s)
             """, (patient_id, contact_name, relationship, phone_number, address))
 
@@ -1907,7 +2030,7 @@ def update_emergency_contact(conn, contact_id, contact_name, relationship, phone
     try:
         with conn.cursor() as cursor:
             # Kiểm tra xem liên hệ khẩn cấp có tồn tại không
-            cursor.execute("SELECT ContactID FROM EmergencyContacts WHERE ContactID = %s", (contact_id,))
+            cursor.execute("SELECT ContactID FROM EmergencyContact WHERE ContactID = %s", (contact_id,))
             if not cursor.fetchone():
                 return False, "❌ Emergency contact not found."
 
@@ -1929,7 +2052,7 @@ def update_emergency_contact(conn, contact_id, contact_name, relationship, phone
                 return False, "No fields to update."
             
             query = f"""
-                UPDATE EmergencyContacts SET {', '.join(update_fields)}
+                UPDATE EmergencyContact SET {', '.join(update_fields)}
                 WHERE ContactID = %s"""
             update_values.append(contact_id)
             cursor.execute(query, tuple(update_values))
