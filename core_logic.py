@@ -853,7 +853,37 @@ def delete_doctor(conn, doctor_id):
         print(f"❌ Failed to delete doctor: {e}")
         conn.rollback()
         return False, f"❌ Failed to delete doctor: {e}"
+def update_invoice_payment_status(conn, invoice_id, new_status):
+    """Updates the payment status of a specific invoice."""
+    valid_statuses = ["Unpaid", "Partial", "Paid"]
+    if new_status not in valid_statuses:
+        return False, f"Invalid status: '{new_status}'. Allowed statuses are {', '.join(valid_statuses)}."
+    if not invoice_id:
+        return False, "Invoice ID is required."
 
+    try:
+        with conn.cursor() as cursor:
+            # Kiểm tra hóa đơn tồn tại
+            cursor.execute("SELECT InvoiceID FROM Invoices WHERE InvoiceID = %s", (invoice_id,))
+            if not cursor.fetchone():
+                return False, f"Invoice with ID {invoice_id} not found."
+
+            cursor.execute("""
+                UPDATE Invoices
+                SET PaymentStatus = %s
+                WHERE InvoiceID = %s
+            """, (new_status, invoice_id))
+            conn.commit()
+            return True, f"Payment status for Invoice #{invoice_id} updated to '{new_status}' successfully."
+    except MySQLError as e:
+        conn.rollback()
+        print(f"DB Error updating invoice status: {e}")
+        return False, f"Database Error: {e}"
+    except Exception as e:
+        conn.rollback()
+        print(f"Unexpected error updating invoice status: {e}")
+        return False, f"An unexpected error occurred: {e}"
+    
 def update_doctor_user(conn, doctor_id, username):
     """Gán username hệ thống cho bác sĩ"""
     try:
@@ -2995,7 +3025,7 @@ class InvoicePDF(FPDF):
 def generate_invoice_pdf(conn, invoice_id, output_path):
     try:
         # Register DejaVu font
-        font_path='C:\\DMS\\prj_0205\\DejaVuSans.ttf'
+        font_path='C:\\Users\\emily\\Downloads\\sql_final\\DejaVuSans.ttf'
         if not os.path.exists(font_path):
             return False, "DejaVu font not found. Please ensure DejaVuSans.ttf is available."
         
@@ -3124,8 +3154,8 @@ def generate_prescription_pdf(conn, prescription_id, output_path):
             # Tạo PDF
             pdf = FPDF()
             pdf.add_page()
-            pdf.add_font('DejaVu', '', 'C:\\DMS\\prj_0205\\DejaVuSans.ttf', uni=True)
-            pdf.add_font('DejaVu', 'B', 'C:\\DMS\\prj_0205\\DejaVuSans-Bold.ttf', uni=True)
+            pdf.add_font('DejaVu', '', 'C:\\Users\\emily\\Downloads\\sql_final\\DejaVuSans.ttf', uni=True)
+            pdf.add_font('DejaVu', 'B', 'C:\\Users\\emily\\Downloads\\sql_final\\DejaVuSans-Bold.ttf', uni=True)
             pdf.set_font("DejaVu", "B", 16)
 
             # Tên bệnh viện, mã điều trị, mã bệnh nhân
@@ -3269,7 +3299,6 @@ def generate_prescription_pdf(conn, prescription_id, output_path):
 
     except Exception as e:
         return False, f"Lỗi khi tạo PDF: {e}"
-
 def get_financial_report_data(conn, start_date=None, end_date=None):
     """
     Get comprehensive financial report data including:

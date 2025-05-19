@@ -1040,13 +1040,13 @@ def open_receptionist_menu(conn, username):
     receptionist_window.lift()
     receptionist_window.attributes('-topmost',True)
     receptionist_window.after(100, lambda: receptionist_window.attributes('-topmost', False))
-    
+
     receptionist_window.title(f"Receptionist Dashboard - {username}")
     receptionist_window.geometry("1200x700")
     receptionist_window.minsize(1000, 600)
     receptionist_window.configure(bg="#ffffff")
 
-    # Bảng màu hiện đại (Keep your color definitions)
+    # Bảng màu hiện đại
     primary_color = "#4a6fa5"
     secondary_color = "#6bbd99"
     accent_color = "#5d9cec"
@@ -1059,315 +1059,446 @@ def open_receptionist_menu(conn, username):
     card_bg = "white"
     card_border = "#e0e0e0"
 
-    # Font settings (Keep your font definitions)
+    # Font settings
     try:
-        title_font = ("Segoe UI", 18, "bold")
-        header_font = ("Segoe UI", 14, "bold")
-        normal_font = ("Segoe UI", 11)
-        small_font = ("Segoe UI", 10)
-        card_font = ("Segoe UI", 14, "bold")
+        title_font_family = "Segoe UI"
+        title_font = (title_font_family, 18, "bold")
+        header_font = (title_font_family, 14, "bold")
+        normal_font = (title_font_family, 11)
+        small_font = (title_font_family, 10)
+        card_font = (title_font_family, 14, "bold")
+        # Ensure font is loaded (optional, for better error handling if font missing)
+        tkFont.Font(family=title_font_family, size=10)
     except tk.TclError:
-        title_font = ("Arial", 18, "bold")
-        header_font = ("Arial", 14, "bold")
-        normal_font = ("Arial", 11)
-        small_font = ("Arial", 10)
-        card_font = ("Arial", 14, "bold")
+        # Fallback fonts if Segoe UI is not available
+        default_font_family = "Arial"
+        title_font = (default_font_family, 18, "bold")
+        header_font = (default_font_family, 14, "bold")
+        normal_font = (default_font_family, 11)
+        small_font = (default_font_family, 10)
+        card_font = (default_font_family, 14, "bold")
+
+
+    # Danh sách các hành động sẽ kích hoạt làm mới dashboard
+    refresh_trigger_actions = [
+        "Schedule Appointment",
+        "Process Admission",
+        "Assign Room",
+        "Update Appointment Status"
+    ]
+
+    def open_update_invoice_status_window(conn_param):
+        invoice_id_str = simpledialog.askstring("Input Invoice ID",
+                                                "Enter Invoice ID to update:",
+                                                parent=receptionist_window)
+        if not invoice_id_str:
+            return
+        if not invoice_id_str.isdigit():
+            messagebox.showerror("Invalid Input", "Please enter a valid numeric Invoice ID.", parent=receptionist_window)
+            return
+
+        invoice_id_to_update = int(invoice_id_str)
+
+        update_dialog = tk.Toplevel(receptionist_window)
+        update_dialog.title(f"Update Status for Invoice #{invoice_id_to_update}")
+        update_dialog.geometry("400x300")
+        update_dialog.config(bg=BG_COLOR)
+        center_window(update_dialog)
+        update_dialog.grab_set()
+        update_dialog.lift()
+        update_dialog.attributes('-topmost', True)
+        update_dialog.after(100, lambda: update_dialog.attributes('-topmost', False))
+
+        current_status_val = "Unknown"
+        total_amount_val = "N/A"
+        patient_name_val = "N/A"
+        try:
+            with conn_param.cursor() as cursor:
+                cursor.execute("""
+                    SELECT i.PaymentStatus, i.TotalAmount, p.PatientName
+                    FROM Invoices i
+                    JOIN Patients p ON i.PatientID = p.PatientID
+                    WHERE i.InvoiceID = %s
+                """, (invoice_id_to_update,))
+                invoice_data = cursor.fetchone()
+                if invoice_data:
+                    current_status_val = invoice_data.get('PaymentStatus', 'Unknown')
+                    total_amount_val = f"{invoice_data.get('TotalAmount', 0):,.0f} VND"
+                    patient_name_val = invoice_data.get('PatientName', 'N/A')
+                else:
+                    messagebox.showerror("Not Found", f"Invoice ID {invoice_id_to_update} not found.", parent=update_dialog)
+                    update_dialog.destroy()
+                    return
+        except Exception as e:
+            messagebox.showerror("DB Error", f"Error fetching invoice details: {e}", parent=update_dialog)
+            update_dialog.destroy()
+            return
+
+        tk.Label(update_dialog, text=f"Invoice ID: {invoice_id_to_update}", bg=BG_COLOR, font=LABEL_FONT).pack(pady=5)
+        tk.Label(update_dialog, text=f"Patient: {patient_name_val}", bg=BG_COLOR, font=LABEL_FONT).pack(pady=5)
+        tk.Label(update_dialog, text=f"Total Amount: {total_amount_val}", bg=BG_COLOR, font=LABEL_FONT).pack(pady=5)
+        tk.Label(update_dialog, text=f"Current Status: {current_status_val}", bg=BG_COLOR, font=LABEL_FONT).pack(pady=5)
+
+        tk.Label(update_dialog, text="New Payment Status:", bg=BG_COLOR, font=LABEL_FONT).pack(pady=(10,0))
+        status_var = tk.StringVar(update_dialog)
+        status_options = ["Unpaid", "Partial", "Paid"]
+        status_var.set(current_status_val if current_status_val in status_options else status_options[0])
+
+        status_dropdown = ttk.OptionMenu(update_dialog, status_var, status_var.get(), *status_options)
+        status_dropdown.pack(pady=5)
+
+        def confirm_update_for_receptionist():
+            new_status = status_var.get()
+            success, message = update_invoice_payment_status(conn_param, invoice_id_to_update, new_status)
+            if success:
+                messagebox.showinfo("Success", message, parent=update_dialog)
+                update_dialog.destroy()
+                if 'combined_receptionist_refresh' in locals() or 'combined_receptionist_refresh' in globals():
+                     combined_receptionist_refresh()
+            else:
+                messagebox.showerror("Error", message, parent=update_dialog)
+                update_dialog.lift()
+                update_dialog.focus_force()
+
+        confirm_btn = tk.Button(update_dialog, text="Update Status", command=confirm_update_for_receptionist)
+        apply_styles(confirm_btn)
+        confirm_btn.pack(pady=10)
+
+    def receptionist_action_handler(action_name, original_command_func, refresh_callback_func):
+        try:
+            original_command_func()
+            if action_name in refresh_trigger_actions and callable(refresh_callback_func):
+                receptionist_window.after(250, refresh_callback_func)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to perform action '{action_name}':\n{str(e)}", parent=receptionist_window)
+            if receptionist_window.winfo_exists(): receptionist_window.focus_force()
 
     # --- Khung Menu Bên Trái ---
-    # (Keep menu_frame, menu_header_frame, avatar_canvas, labels)
     menu_frame = tk.Frame(receptionist_window, bg=menu_bg, width=280)
     menu_frame.pack(side="left", fill="y")
     menu_frame.pack_propagate(False)
+
     menu_header_frame = tk.Frame(menu_frame, bg=menu_header_bg, height=170)
     menu_header_frame.pack(fill="x")
     menu_header_frame.pack_propagate(False)
+
     avatar_canvas = tk.Canvas(menu_header_frame, width=70, height=70, bg=menu_header_bg, highlightthickness=0)
     avatar_canvas.pack(pady=(25, 10))
     avatar_canvas.create_oval(5, 5, 65, 65, fill=primary_color, outline="")
     avatar_canvas.create_text(35, 35, text=username[0].upper() if username else 'R',
                              font=(title_font[0], 24, "bold"), fill="white")
+
     tk.Label(menu_header_frame, text=username, font=(normal_font[0], 12, "bold"),
              fg=menu_fg, bg=menu_header_bg).pack(pady=(0, 5))
     tk.Label(menu_header_frame, text="Receptionist", font=small_font,
              fg="#bdc3c7", bg=menu_header_bg).pack(pady=(0, 15))
 
-
     # --- Các Mục Menu với thanh cuộn ---
-    # (Keep menu_canvas, scrollbar, menu_buttons_frame, and scrolling logic)
     menu_canvas = tk.Canvas(menu_frame, bg=menu_bg, highlightthickness=0)
     menu_scrollbar = ttk.Scrollbar(menu_frame, orient="vertical", command=menu_canvas.yview)
     menu_buttons_frame = tk.Frame(menu_canvas, bg=menu_bg)
+
     menu_canvas.create_window((0, 0), window=menu_buttons_frame, anchor="nw", tags="menu_buttons_frame")
     menu_canvas.configure(yscrollcommand=menu_scrollbar.set)
+
     menu_scrollbar.pack(side="right", fill="y")
     menu_canvas.pack(side="left", fill="both", expand=True)
+
     def update_scroll_region(event):
         menu_canvas.configure(scrollregion=menu_canvas.bbox("all"))
         menu_canvas.itemconfig("menu_buttons_frame", width=event.width)
     menu_buttons_frame.bind("<Configure>", update_scroll_region)
+
     def _on_mousewheel_menu(event):
         delta = 0
-        if hasattr(event, 'delta') and event.delta != 0: delta = -1 * (event.delta // 120)
-        elif hasattr(event, 'num') and event.num in (4, 5): delta = -1 if event.num == 4 else 1
-        if delta: menu_canvas.yview_scroll(delta, "units")
-    menu_frame.bind_all("<MouseWheel>", _on_mousewheel_menu)
-    menu_frame.bind_all("<Button-4>", _on_mousewheel_menu)
-    menu_frame.bind_all("<Button-5>", _on_mousewheel_menu)
+        if hasattr(event, 'delta') and event.delta != 0:
+            delta = -1 * (event.delta // 120)
+        elif hasattr(event, 'num') and event.num in (4, 5):
+            delta = -1 if event.num == 4 else 1
+        if delta:
+            menu_canvas.yview_scroll(delta, "units")
+
+    for widget in [menu_canvas, menu_buttons_frame]:
+        widget.bind("<MouseWheel>", _on_mousewheel_menu)
+        widget.bind("<Button-4>", _on_mousewheel_menu)
+        widget.bind("<Button-5>", _on_mousewheel_menu)
 
 
     # --- Khu Vực Nội Dung Chính ---
-    # (Keep content_frame, header_frame, user_frame, stats_frame, create_stat_card)
     content_frame = tk.Frame(receptionist_window, bg=light_color)
     content_frame.pack(side="right", fill="both", expand=True, padx=20, pady=20)
+
     header_frame = tk.Frame(content_frame, bg=primary_color, height=80)
-    header_frame.pack(fill="x"); header_frame.pack_propagate(False)
+    header_frame.pack(fill="x")
+    header_frame.pack_propagate(False)
     tk.Label(header_frame, text="Receptionist Dashboard", font=title_font, fg="white", bg=primary_color).pack(side="left", padx=30, pady=20)
+
     user_frame = tk.Frame(header_frame, bg=primary_color)
     user_frame.pack(side="right", padx=20, pady=15)
     tk.Label(user_frame, text=f"Welcome, {username}", font=("Arial", 12), fg="white", bg=primary_color).pack(side="top", anchor="e")
     tk.Label(user_frame, text="Role: Receptionist", font=("Arial", 10), fg="#eaf2f8", bg=primary_color).pack(side="bottom", anchor="e")
-    stats_frame = tk.Frame(content_frame, bg=light_color); stats_frame.pack(fill=tk.X, pady=(10, 20))
+
+    # --- KHUNG THỐNG KÊ ---
+    stats_frame = tk.Frame(content_frame, bg=light_color)
+    stats_frame.pack(fill=tk.X, pady=(10, 20))
+    stat_value_labels = {}
 
     def get_receptionist_stats(db_conn):
-        stats_data = {"today_appointments": "N/A", "pending_admissions": "N/A", "available_rooms": "N/A"}
-        
+        stats_data_fetch = {"today_appointments": "N/A", "pending_admissions": "N/A", "available_rooms": "N/A"}
         if not db_conn:
-            return stats_data
-        
+            return stats_data_fetch
         try:
             with db_conn.cursor() as cursor:
-                # Ensure today is in the correct format: YYYY-MM-DD
-                today = datetime.now().date()  # Get today's date
-                today_str = today.strftime('%Y-%m-%d')  # Format it as a string
-                
-                # Print for debugging
-                print(f"Executing query with date: {today_str}")
-                
-                # Today's appointments count
-                query = f"SELECT COUNT(*) as count FROM Appointments WHERE DATE(AppointmentDate) = '{today_str}'"
-                cursor.execute(query)
-                result = cursor.fetchone()
-                stats_data["today_appointments"] = str(result['count']) if result and result['count'] is not None else "0"
-                
-                # Pending admissions count
+                today = datetime.now().date()
+                today_str = today.strftime('%Y-%m-%d')
+                query_appts = f"SELECT COUNT(*) as count FROM Appointments WHERE DATE(AppointmentDate) = '{today_str}' AND Status = 'Scheduled'"
+                cursor.execute(query_appts)
+                result_appts = cursor.fetchone()
+                stats_data_fetch["today_appointments"] = str(result_appts['count']) if result_appts and result_appts['count'] is not None else "0"
                 cursor.execute("SELECT COUNT(*) as count FROM AdmissionOrders WHERE Status = 'Pending'")
-                result = cursor.fetchone()
-                stats_data["pending_admissions"] = str(result['count']) if result and result['count'] is not None else "0"
-                
-                # Available rooms count
+                result_admissions = cursor.fetchone()
+                stats_data_fetch["pending_admissions"] = str(result_admissions['count']) if result_admissions and result_admissions['count'] is not None else "0"
                 cursor.execute("SELECT COUNT(*) as count FROM Rooms WHERE Status = 'Available'")
-                result = cursor.fetchone()
-                stats_data["available_rooms"] = str(result['count']) if result and result['count'] is not None else "0"
-        
+                result_rooms = cursor.fetchone()
+                stats_data_fetch["available_rooms"] = str(result_rooms['count']) if result_rooms and result_rooms['count'] is not None else "0"
         except Exception as e:
             print(f"Database error fetching receptionist stats: {e}")
-        
-        return stats_data
+            for key_item in stats_data_fetch: stats_data_fetch[key_item] = "E"
+        return stats_data_fetch
 
-    def create_stat_card(parent, title, value, color, icon=None):
-        card = tk.Frame(parent, bg=card_bg, bd=0, highlightthickness=1,
-                    highlightbackground=card_border, padx=15, pady=15)
-        
-        header = tk.Frame(card, bg=card_bg)
-        header.pack(fill="x", pady=(0, 10))
-        
+    def create_stat_card_and_get_label(parent, title, value, color, icon=None):
+        card = tk.Frame(parent, bg=card_bg, bd=0, relief="flat",
+                        highlightbackground=card_border, highlightthickness=1,
+                        padx=15, pady=15)
+        header_card = tk.Frame(card, bg=card_bg)
+        header_card.pack(fill="x", pady=(0, 10))
         if icon:
-            tk.Label(header, text=icon, font=(normal_font[0], 16),
+            tk.Label(header_card, text=icon, font=(normal_font[0], 16),
                     bg=card_bg, fg=color).pack(side="left", padx=(0, 10))
-        
-        tk.Label(header, text=title.upper(), font=(small_font[0], 10, "bold"),
+        tk.Label(header_card, text=title.upper(), font=(small_font[0], 10, "bold"),
                 bg=card_bg, fg="#7f8c8d").pack(side="left")
-        
-        tk.Label(card, text=str(value), font=card_font,
-                bg=card_bg, fg=dark_color).pack(anchor="w", pady=5)
-        
-        return card
+        value_display_label = tk.Label(card, text=str(value), font=card_font,
+                                        bg=card_bg, fg=dark_color)
+        value_display_label.pack(anchor="w", pady=5)
+        return card, value_display_label
 
-    # Get stats data from the database
-    stats_data = get_receptionist_stats(conn)
-
-    # Info for each stat card
-    stat_cards_info = [
-        ("Today's Appointments", stats_data.get("today_appointments", "N/A"), accent_color, "📅"),
-        ("Pending Admissions", stats_data.get("pending_admissions", "N/A"), secondary_color, "📋"),
-        ("Available Rooms", stats_data.get("available_rooms", "N/A"), primary_color, "🏥")
+    initial_stats_data = get_receptionist_stats(conn)
+    stat_cards_definitions = [
+        {"key": "today_appointments", "title": "Today's Appointments", "color": accent_color, "icon": "📅"},
+        {"key": "pending_admissions", "title": "Pending Admissions", "color": secondary_color, "icon": "📋"},
+        {"key": "available_rooms", "title": "Available Rooms", "color": primary_color, "icon": "🏥"}
     ]
-
-    # Create and place the stat cards
-    for i, (title, value, color, icon) in enumerate(stat_cards_info):
-        card = create_stat_card(stats_frame, title, value, color, icon)
-        card.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
+    for i, card_def in enumerate(stat_cards_definitions):
+        value = initial_stats_data.get(card_def["key"], "N/A")
+        card_widget, value_label_widget = create_stat_card_and_get_label(
+            stats_frame, card_def["title"], value, card_def["color"], card_def["icon"]
+        )
+        card_widget.grid(row=0, column=i, padx=10, pady=5, sticky="nsew")
         stats_frame.grid_columnconfigure(i, weight=1)
+        stat_value_labels[card_def["key"]] = value_label_widget
 
+    def refresh_receptionist_dashboard_stats():
+        if not receptionist_window.winfo_exists(): return
+        new_stats = get_receptionist_stats(conn)
+        for key_stat, label_widget in stat_value_labels.items():
+            if label_widget.winfo_exists():
+                label_widget.config(text=str(new_stats.get(key_stat, "E")))
 
-    # --- Danh sách hẹn hôm nay (Sử dụng dữ liệu thật) ---
-    # (Keep the today_frame, treeview, scrollbar, and refresh function setup)
-    today_frame = tk.Frame(content_frame, bg=card_bg, bd=0, relief="flat", highlightbackground=card_border, highlightthickness=1)
+    # --- Danh sách hẹn hôm nay ---
+    today_frame = tk.Frame(content_frame, bg=card_bg, bd=0, relief="flat",
+                           highlightbackground=card_border, highlightthickness=1)
     today_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
-    list_header = tk.Frame(today_frame, bg=card_bg); list_header.pack(fill=tk.X, pady=(10, 5), padx=15)
-    tk.Label(list_header, text="TODAY'S APPOINTMENTS", font=(small_font[0], 10, "bold"), bg=card_bg, fg="#7f8c8d").pack(side="left")
-    tree_container = tk.Frame(today_frame, bg=card_bg); tree_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
-    columns = ("Time", "Patient", "Doctor", "Status"); tree_style = ttk.Style()
+
+    list_header = tk.Frame(today_frame, bg=card_bg)
+    list_header.pack(fill=tk.X, pady=(10, 5), padx=15)
+    tk.Label(list_header, text="TODAY'S APPOINTMENTS", font=(small_font[0], 10, "bold"),
+             bg=card_bg, fg="#7f8c8d").pack(side="left")
+
+    tree_container = tk.Frame(today_frame, bg=card_bg)
+    tree_container.pack(fill=tk.BOTH, expand=True, padx=15, pady=(0, 15))
+
+    columns = ("Time", "Patient", "Doctor", "Status")
+    tree_style = ttk.Style()
     tree_style.configure("Receptionist.Treeview.Heading", font=(small_font[0], small_font[1], 'bold'))
     tree_style.configure("Receptionist.Treeview", font=small_font, rowheight=28)
+
     tree = ttk.Treeview(tree_container, columns=columns, show="headings", height=10, style="Receptionist.Treeview")
-    for col in columns: # Keep column setup
-        anchor = tk.CENTER if col == "Time" else tk.W; width = 100 if col == "Time" else (150 if col == "Status" else 200)
-        tree.heading(col, text=col, anchor=anchor); tree.column(col, width=width, anchor=anchor, stretch=(col != "Time"))
-    scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview); tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side="right", fill="y"); tree.pack(side="left", fill=tk.BOTH, expand=True)
-    tree.tag_configure('Confirmed', background='#e8f5e9'); tree.tag_configure('Pending', background='#fff9c4')
-    tree.tag_configure('Cancelled', background='#ffebee'); tree.tag_configure('Scheduled', background='#e3f2fd')
+    for col in columns:
+        anchor = tk.CENTER if col == "Time" else tk.W
+        width = 100 if col == "Time" else (150 if col == "Status" else 200)
+        tree.heading(col, text=col, anchor=anchor)
+        tree.column(col, width=width, anchor=anchor, stretch=(col != "Time"))
+
+    scrollbar = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side="right", fill="y")
+    tree.pack(side="left", fill=tk.BOTH, expand=True)
+
+    tree.tag_configure('Confirmed', background='#e8f5e9')
+    tree.tag_configure('Pending', background='#fff9c4')
+    tree.tag_configure('Cancelled', background='#ffebee')
+    tree.tag_configure('Scheduled', background='#e3f2fd')
 
     def refresh_today_appointments():
-        if not tree.winfo_exists():
-            return
+        if not tree.winfo_exists(): return
         try:
-            for item in tree.get_children():
-                tree.delete(item)
-        except tk.TclError:
-            return
+            for item in tree.get_children(): tree.delete(item)
+        except tk.TclError: return
 
         try:
             today = datetime.now().date()
-            success, appointments = search_appointments(conn, role='receptionist', username=username, status=None)
+            success, appointments = search_appointments(
+                conn,
+                role='receptionist', # Receptionist can see all for today
+                username=None,      # Not needed for receptionist 'all' view
+                year=today.year,
+                month=today.month,
+                day=today.day,
+                status=None # Get all statuses for today to show differentiation
+            )
 
             if success:
-                count_today_appointments = 0  # ✅ Biến đếm số lịch hôm nay
+                count_today_appointments = 0
+                if appointments: # Check if appointments list is not empty
+                    for appt in appointments:
+                        # Ensure appointment date is today
+                        appt_date_obj = appt.get("AppointmentDate")
+                        if isinstance(appt_date_obj, str):
+                            try: appt_date_obj = datetime.strptime(appt_date_obj, "%Y-%m-%d").date()
+                            except ValueError: continue # Skip if date is invalid
+                        elif isinstance(appt_date_obj, datetime):
+                            appt_date_obj = appt_date_obj.date()
 
-                for appt in appointments:
-                    appt_date = appt.get("AppointmentDate")
-                    if not appt_date:
-                        continue
+                        if appt_date_obj != today: continue # Skip if not today
 
-                    # Chuyển đổi sang kiểu date nếu cần
-                    if isinstance(appt_date, str):
-                        try:
-                            appt_date = datetime.strptime(appt_date, "%Y-%m-%d").date()
-                        except ValueError:
-                            continue
-                    elif isinstance(appt_date, datetime):
-                        appt_date = appt_date.date()
+                        count_today_appointments += 1
+                        time_val = appt.get("AppointmentTime") # This is the raw value from DB
+                        time_str = "N/A"
 
-                    if appt_date != today:
-                        continue
-
-                    # ✅ Nếu đúng là hôm nay thì xử lý tiếp
-                    count_today_appointments += 1
-
-                    # Xử lý giờ hẹn
-                    time_str = "N/A"
-                    appt_time = appt.get("AppointmentTime")
-                    if appt_time:
-                        if isinstance(appt_time, time):
-                            time_str = appt_time.strftime('%H:%M')
-                        elif isinstance(appt_time, datetime):
-                            time_str = appt_time.strftime('%H:%M')
-                        elif isinstance(appt_time, str):
-                            for fmt in ("%H:%M:%S", "%H:%M"):
+                        if time_val is not None:
+                            if isinstance(time_val, timedelta): # If time is stored as TIME/timedelta in DB
+                                # Convert timedelta to a string "HH:MM"
+                                total_seconds = int(time_val.total_seconds())
+                                hours = total_seconds // 3600
+                                minutes = (total_seconds % 3600) // 60
+                                time_str = f"{hours:02d}:{minutes:02d}"
+                            elif isinstance(time_val, time): # If it's already a datetime.time object
+                                time_str = time_val.strftime('%H:%M')
+                            elif isinstance(time_val, str): # If it's a string "HH:MM:SS" or "HH:MM"
                                 try:
-                                    time_str = datetime.strptime(appt_time, fmt).strftime('%H:%M')
-                                    break
+                                    parsed_time = datetime.strptime(time_val, '%H:%M:%S').time()
+                                    time_str = parsed_time.strftime('%H:%M')
                                 except ValueError:
-                                    continue
+                                    try:
+                                        parsed_time = datetime.strptime(time_val, '%H:%M').time()
+                                        time_str = parsed_time.strftime('%H:%M')
+                                    except ValueError:
+                                        print(f"Warning: Could not parse time string '{time_val}' for appt ID {appt.get('AppointmentID')}")
+                                        time_str = "Invalid Time" # Or keep as "N/A"
                             else:
-                                time_str = appt_time
+                                # Handle other unexpected types, or log them
+                                print(f"Warning: Unexpected type for AppointmentTime: {type(time_val)} for appt ID {appt.get('AppointmentID')}")
+                                time_str = "Unknown Time Format"
 
-                    patient_name = appt.get("PatientName", "N/A")
-                    doctor_name = appt.get("DoctorName", "N/A")
-                    status = appt.get("Status", "N/A")
-
-                    tree.insert("", tk.END, values=(time_str, patient_name, doctor_name, status), tags=(status,))
+                        patient_name = appt.get("PatientName", "N/A")
+                        doctor_name = appt.get("DoctorName", "N/A")
+                        status_val = appt.get("Status", "N/A") # Use 'status_val' to avoid conflict
+                        tree.insert("", tk.END, values=(time_str, patient_name, doctor_name, status_val), tags=(status_val,))
+                else: # No appointments found by search_appointments
+                     count_today_appointments = 0 # Ensure it's reset
 
                 if count_today_appointments == 0:
-                    # ✅ Không có lịch hôm nay → thông báo rõ
                     tree.insert("", tk.END, values=("", "No appointments scheduled for today", "", ""))
-
             else:
                 messagebox.showerror("Load Error", f"Could not load appointments: {appointments}", parent=receptionist_window)
-
+                if tree.winfo_exists(): tree.insert("", tk.END, values=("Error", str(appointments) , "", ""))
         except Exception as e:
-            messagebox.showerror("Unexpected Error", f"Error: {str(e)}", parent=receptionist_window)
+            if receptionist_window.winfo_exists():
+                messagebox.showerror("Unexpected Error", f"Error in refresh_today_appointments: {str(e)}", parent=receptionist_window)
             import traceback
             traceback.print_exc()
+            if tree.winfo_exists(): tree.insert("", tk.END, values=("Error", str(e) , "", ""))
 
-    refresh_btn = tk.Button(list_header, text="🔄 Refresh", font=(small_font[0], 9), fg=accent_color, bg=card_bg, relief="flat", bd=0, activebackground=light_color, activeforeground=primary_color, command=refresh_today_appointments)
+    def combined_receptionist_refresh():
+        if receptionist_window.winfo_exists():
+            refresh_today_appointments()
+            refresh_receptionist_dashboard_stats()
+        else:
+            print("Receptionist window closed, skipping combined refresh.")
+
+    refresh_btn = tk.Button(list_header, text="🔄 Refresh All",
+                            font=(small_font[0], 9), fg=accent_color, bg=card_bg,
+                            relief="flat", bd=0, activebackground=light_color,
+                            activeforeground=primary_color, command=combined_receptionist_refresh)
     refresh_btn.pack(side="right", padx=5)
-    receptionist_window.after(100, refresh_today_appointments)
+    receptionist_window.after(150, combined_receptionist_refresh)
 
-
-    # --- Các nút chức năng chính (Updated with user's list + Create Invoice) ---
     menu_actions = {
-        # Patient Management
         "Add Patient": ("➕🧑", lambda: add_patient_gui(conn)),
         "View Patient": ("🔍🧑", lambda: view_patient_gui(conn)),
         "Update Patient Info": ("✏️🧑", lambda: update_patient_info_gui(conn)),
         "Delete Patient": ("❌🧑", lambda: delete_patient_gui(conn)),
-
-        # Emergency Contacts
         "Add Emergency Contact": ("➕🆘", lambda: add_emergency_contact_gui(conn)),
         "Update Emergency Contact": ("✏️🆘", lambda: update_emergency_contact_gui(conn)),
         "Delete Emergency Contact": ("❌🆘", lambda: delete_emergency_contact_gui(conn)),
-
-        # Appointments
         "Schedule Appointment": ("➕📅", lambda: schedule_appointment_gui(conn)),
         "View Appointments": ("🔍📅", lambda: view_appointments_gui(conn, 'receptionist')),
-
-        # Admissions & Rooms
+        "Update Appointment Status": ("🔄📅", lambda: update_appointment_status_gui(conn)),
         "Process Admission": ("➡️🏥", lambda: process_admission_gui(conn, username)),
         "View Rooms": ("🔍🚪", lambda: view_rooms_gui(conn)),
         "Assign Room": ("➡️🚪", lambda: assign_room_gui(conn)),
-
-        # Billing & Insurance
-        "Create Invoice": ("➕💰", lambda: create_invoice_gui(conn)), # <<< ADDED
+        "Create Invoice": ("➕💰", lambda: create_invoice_gui(conn)),
         "View Invoices": ("🔍💰", lambda: view_and_print_invoices_by_patient(conn)),
+        "Update Invoice Status": ("✏️🧾", lambda: open_update_invoice_status_window(conn)),
         "View Insurance": ("🛡️", lambda: view_insurance_gui(conn)),
         "Create Insurance": ("➕🛡️", lambda: add_insurance_gui(conn)),
-
-        # Other Lookups
         "View Departments": ("🏢", lambda: view_departments_gui(conn)),
         "View Services": ("⚕️", lambda: view_services_gui(conn)),
         "View Doctors": ("🧑‍⚕️", lambda: view_doctor_gui(conn)),
-
-        # System
         "Change Password": ("🔒", lambda: change_password_gui(conn, username)),
         "Logout": ("🚪", lambda: logout_action(receptionist_window))
     }
 
-    # --- Generate Menu Buttons from the Dictionary ---
     categories = {
         "Patient": ["Add Patient", "View Patient", "Update Patient Info", "Delete Patient"],
         "Emergency": ["Add Emergency Contact", "Update Emergency Contact", "Delete Emergency Contact"],
-        "Scheduling": ["Schedule Appointment", "View Appointments"],
+        "Scheduling": ["Schedule Appointment", "View Appointments", "Update Appointment Status"],
         "Admissions & Rooms": ["Process Admission", "Assign Room", "View Rooms"],
-        "Billing & Insurance": ["Create Invoice", "View Invoices", "Create Insurance", "View Insurance"], # <<< Added Create Invoice here
+        "Billing & Insurance": ["Create Invoice", "View Invoices", "Update Invoice Status", "Create Insurance", "View Insurance"],
         "Information": ["View Departments", "View Services", "View Doctors"],
         "System": ["Change Password", "Logout"]
     }
 
-    # (Keep the loop that creates buttons based on categories and menu_actions)
-    for widget in menu_buttons_frame.winfo_children(): widget.destroy() # Clear existing
+    for widget in menu_buttons_frame.winfo_children(): widget.destroy()
     for category, items in categories.items():
-        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---", font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
+        sep_label = tk.Label(menu_buttons_frame, text=f"--- {category.upper()} ---",
+                             font=(small_font[0], 9, "italic"), fg="#aed6f1", bg=menu_bg, anchor="w")
         sep_label.pack(fill="x", padx=10, pady=(8, 2))
-        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: sep_label.bind(event_type, _on_mousewheel_menu)
+        for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]:
+            sep_label.bind(event_type, _on_mousewheel_menu)
         for text in items:
             if text in menu_actions:
-                icon, command = menu_actions[text]
-                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w", font=normal_font, fg=menu_fg, bg=menu_bg, bd=0, padx=15, pady=10, relief="flat", activebackground=menu_hover_bg, activeforeground=menu_fg, command=command)
+                icon, original_command = menu_actions[text]
+                wrapped_command = lambda name=text, cmd=original_command: \
+                    receptionist_action_handler(name, cmd, combined_receptionist_refresh)
+                btn = tk.Button(menu_buttons_frame, text=f" {icon}  {text}", anchor="w",
+                                font=normal_font, fg=menu_fg, bg=menu_bg,
+                                bd=0, padx=15, pady=10, relief="flat",
+                                activebackground=menu_hover_bg, activeforeground=menu_fg,
+                                command=wrapped_command)
                 btn.pack(fill="x", pady=1, padx=5)
-                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg)); btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
-                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]: btn.bind(event_type, _on_mousewheel_menu)
+                btn.bind("<Enter>", lambda e, b=btn: b.config(bg=menu_hover_bg))
+                btn.bind("<Leave>", lambda e, b=btn: b.config(bg=menu_bg))
+                for event_type in ["<MouseWheel>", "<Button-4>", "<Button-5>"]:
+                    btn.bind(event_type, _on_mousewheel_menu)
 
+    tk.Label(menu_frame, text="Hospital System © 2025",
+             fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
 
-    # Footer menu
-    tk.Label(menu_frame, text="Hospital System © 2025", fg="#7f8c8d", bg=menu_bg, font=(small_font[0], 8)).pack(side="bottom", pady=15)
-
-    # Center and run
     try: center_window(receptionist_window)
     except NameError: print("Warning: center_window function not defined.")
-    receptionist_window.mainloop()
 
+    receptionist_window.mainloop()
 def open_accountant_menu(conn, username):
     """Opens the Accountant Dashboard with modern UI similar to doctor/receptionist menus"""
     accountant_window = tk.Tk()
