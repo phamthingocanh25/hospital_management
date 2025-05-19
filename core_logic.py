@@ -3173,11 +3173,12 @@ def generate_prescription_pdf(conn, prescription_id, output_path):
             }
             for med in details:
                 cell_texts = {
-                    "Medicine": med.get("MedicineName", "-"),
-                    "Dosage": med.get("Dosage", "-"),
-                    "Frequency": med.get("Frequency", "-"),
-                    "Duration": med.get("Duration", "-")
+                    "Medicine": med.get("MedicineName") or "-",
+                    "Dosage": med.get("Dosage") or "-",
+                    "Frequency": med.get("Frequency") or "-",
+                    "Duration": med.get("Duration") or "-"
                 }
+
 
                 # Tính số dòng thực sự cần dùng cho mỗi ô
                 line_counts = []
